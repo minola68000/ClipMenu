@@ -186,7 +186,8 @@ NSDictionary *_storeTypesDictionary()
 	/* Snippet */
 	[defaultValues setObject:[NSNumber numberWithInteger:CMPositionOfSnippetsBelowClips] forKey:CMPrefPositionOfSnippetsKey];
 	/* Updates */
-	[defaultValues setObject:[NSNumber numberWithBool:YES] forKey:CMEnableAutomaticCheckKey];
+	/* Fork default: do not phone home to upstream update feeds. */
+	[defaultValues setObject:[NSNumber numberWithBool:NO] forKey:CMEnableAutomaticCheckKey];
 	[defaultValues setObject:[NSNumber numberWithBool:NO] forKey:CMEnableAutomaticCheckPreReleaseKey];
 	[defaultValues setObject:[NSNumber numberWithInteger:86400] forKey:CMUpdateCheckIntervalKey]; // daily
 	
@@ -212,8 +213,11 @@ NSDictionary *_storeTypesDictionary()
 				  forKeyPath:CMPrefHotKeysKey];
 //	[defaults removeObserver:self
 //				  forKeyPath:CMPrefLoginItemKey];
-	[defaults removeObserver:self
-				  forKeyPath:CMEnableAutomaticCheckPreReleaseKey];
+	/* Only registered when SUFeedURL is present (see applicationDidFinishLaunching:). */
+	if (updaterController) {
+		[defaults removeObserver:self
+					  forKeyPath:CMEnableAutomaticCheckPreReleaseKey];
+	}
 	
 	[[ClipsController sharedInstance] removeObserver:self
 										  forKeyPath:@"clips"];
@@ -317,7 +321,20 @@ NSDictionary *_storeTypesDictionary()
 		[self _promptToAddLoginItems];
 	}
 		
-	/* Sparkle 2 updater (replaces legacy SUUpdater sharedUpdater) */
+	/*
+	 * This fork ships no appcast. Do not start Sparkle, and scrub any legacy
+	 * Feedburner URL / auto-check flags persisted by older builds.
+	 */
+	NSString *feedURL = [CMUtilities infoValueForKey:@"SUFeedURL"];
+	BOOL hasFeed = [feedURL isKindOfClass:[NSString class]] && [feedURL length] > 0;
+	if (!hasFeed) {
+		[defaults removeObjectForKey:@"SUFeedURL"];
+		[defaults setBool:NO forKey:@"SUEnableAutomaticChecks"];
+		[defaults setBool:NO forKey:CMEnableAutomaticCheckKey];
+		[defaults setBool:NO forKey:CMEnableAutomaticCheckPreReleaseKey];
+		return;
+	}
+	
 	if (!updaterController) {
 		updaterController = [[SPUStandardUpdaterController alloc]
 							 initWithStartingUpdater:YES
@@ -528,9 +545,11 @@ NSDictionary *_storeTypesDictionary()
 
 - (void)_toggleCheckPreReleaseUpdates:(BOOL)flag
 {
-	/* Feed URL is provided dynamically via SPUUpdaterDelegate. */
+	/* Feed URL is provided dynamically via SPUUpdaterDelegate when configured. */
 	(void)flag;
-	[updaterController.updater resetUpdateCycle];
+	if (updaterController) {
+		[updaterController.updater resetUpdateCycle];
+	}
 }
 
 #pragma mark - SPUUpdaterDelegate -
@@ -541,6 +560,9 @@ NSDictionary *_storeTypesDictionary()
 	NSString *feed = preRelease
 		? [CMUtilities infoValueForKey:@"SUPreReleaseFeedURL"]
 		: [CMUtilities infoValueForKey:@"SUFeedURL"];
+	if (![feed isKindOfClass:[NSString class]] || [feed length] == 0) {
+		return nil;
+	}
 	return feed;
 }
 

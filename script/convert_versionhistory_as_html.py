@@ -10,15 +10,14 @@ import yaml
 
 # config
 CHANGE_KEYS = ('new', 'changed', 'fixed')
-#DESTINATION = '../html'
-DESTINATION = '/Users/naotaka/Development/GAE/data/clipmenu'
-FILENAME = 'versionhistory/index.txt'
-#INPUT_PATH = '../VersionHistory-en.yaml'
-#INPUT_PATH = '../VersionHistory-ja.yaml'
-DOWNLOAD_DIR = 'https://dl.dropbox.com/u/1140644/clipmenu/'
-
-# path
+# Machine-agnostic defaults; override with CLIPMENU_* env vars when needed.
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.split(CURRENT_DIR)[0]
+DESTINATION = os.environ.get(
+    'CLIPMENU_VERSIONHISTORY_DESTINATION',
+    os.path.join(PROJECT_DIR, 'build', 'versionhistory'))
+FILENAME = 'versionhistory/index.txt'
+DOWNLOAD_DIR = os.environ.get('CLIPMENU_PUBLIC_URL', '')
 
 #basename = os.path.splitext(os.path.basename(INPUT_PATH))[0]
 #dest_path = os.path.join(CURRENT_DIR, DESTINATION, basename + '.html')

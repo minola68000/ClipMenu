@@ -10,6 +10,7 @@
 *.perspectivev3
 !default.perspectivev3
 xcuserdata
+.vscode/
 profile
 *.moved-aside
 DerivedData

@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
 	<key>CFBundleGetInfoString</key>
-	<string>0.4.4a13, © 2008-2010 Naotaka Morimoto.</string>
+	<string>0.4.5 (unofficial maintenance fork of 0.4.4a13), © 2008-2014 Naotaka Morimoto.</string>
 	<key>CFBundleIconFile</key>
 	<string>ClipMenu3</string>
 	<key>CFBundleIdentifier</key>
@@ -19,35 +19,21 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4.4a13</string>
+	<string>0.4.5</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>0.4.4a13</string>
+	<string>0.4.5</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.5.0</string>
-	<key>LSMinimumSystemVersionByArchitecture</key>
-	<dict>
-		<key>i386</key>
-		<string>10.5.0</string>
-		<key>ppc</key>
-		<string>10.5.0</string>
-		<key>ppc64</key>
-		<string>10.6.0</string>
-		<key>x86_64</key>
-		<string>10.6.0</string>
-	</dict>
+	<string>12.0</string>
 	<key>LSUIElement</key>
 	<string>1</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>SUFeedURL</key>
-	<string>http://feeds.feedburner.com/clipmenu-appcast</string>
-	<key>SUPreReleaseFeedURL</key>
-	<string>http://feeds.feedburner.com/clipmenu-pre-appcast</string>
-	<key>SUPublicDSAKeyFile</key>
-	<string>dsa_pub.pem</string>
+	<!-- Automatic updates disabled in this maintenance fork (no appcast feed). -->
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
 </dict>
 </plist>
