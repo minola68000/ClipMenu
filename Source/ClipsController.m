@@ -293,7 +293,16 @@ static ClipsController *sharedInstance = nil;
 
 	NSString *path = [CMUtilities applicationSupportFolder];
 	if ([CMUtilities prepareSaveToPath:path]) {
-		result = [NSKeyedArchiver archiveRootObject:self.sortedClips toFile:[self _saveFilePath]];
+		NSError *error = nil;
+		/* requiringSecureCoding:NO keeps compatibility with existing clips.data */
+		NSData *data = [NSKeyedArchiver archivedDataWithRootObject:self.sortedClips
+											 requiringSecureCoding:NO
+															 error:&error];
+		if (data) {
+			result = [data writeToFile:[self _saveFilePath] options:NSDataWritingAtomic error:&error];
+		} else {
+			NSLog(@"Failed to archive clips: %@", error);
+		}
 	}
 	
 	return result;
@@ -301,8 +310,26 @@ static ClipsController *sharedInstance = nil;
 
 - (void)loadClips
 {
-	NSMutableArray *loadedData = [NSKeyedUnarchiver unarchiveObjectWithFile:[self _saveFilePath]];
+	NSString *path = [self _saveFilePath];
+	NSData *data = [NSData dataWithContentsOfFile:path];
+	if (!data) {
+		return;
+	}
+	NSError *error = nil;
+	NSMutableArray *loadedData = [NSKeyedUnarchiver unarchivedObjectOfClass:[NSArray class]
+																   fromData:data
+																	  error:&error];
+	if (!loadedData) {
+		/* Fall back for archives written without secure coding metadata */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		loadedData = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+#pragma clang diagnostic pop
+	}
 	if (loadedData == nil) {
+		if (error) {
+			NSLog(@"Failed to load clips: %@", error);
+		}
 		return;
 	}
 				

@@ -431,6 +431,13 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)updateStatusMenu
 {
 //	NSLog(@"updateStatusMenu: %@", statusItem);
+
+	if (![NSThread isMainThread]) {
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self updateStatusMenu];
+		});
+		return;
+	}
 	
 	if (statusItem) {		
 //		[self _resetMenuIconSize];		// XXX Need to modify?
@@ -1304,13 +1311,23 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	NSStatusBar *statusBar = [NSStatusBar systemStatusBar];
 	
 	statusItem = [[statusBar statusItemWithLength:NSVariableStatusItemLength] retain];
-	[statusItem setImage:statusIcon];
-	[statusItem setAlternateImage:statusIconPressed];
-	[statusItem setHighlightMode:YES];
-	[statusItem setToolTip:toolTipLabel];
+	/* Prefer NSStatusBarButton API (macOS 10.10+); keep legacy setters as fallback. */
+	if ([statusItem respondsToSelector:@selector(button)] && statusItem.button) {
+		statusItem.button.image = statusIcon;
+		statusItem.button.toolTip = toolTipLabel;
+		statusItem.button.imageScaling = NSImageScaleProportionallyDown;
+		if ([statusIcon respondsToSelector:@selector(setTemplate:)]) {
+			[statusIcon setTemplate:YES];
+			statusItem.button.image = statusIcon;
+		}
+	} else {
+		[statusItem setImage:statusIcon];
+		[statusItem setAlternateImage:statusIconPressed];
+		[statusItem setHighlightMode:YES];
+		[statusItem setToolTip:toolTipLabel];
+	}
 	
 	if (clipMenu) {
-		
 		[statusItem setMenu:clipMenu];
 	}
 }

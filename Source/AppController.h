@@ -1,12 +1,14 @@
 /* AppController */
 
 #import <Cocoa/Cocoa.h>
+#import <Sparkle/Sparkle.h>
 
 @class SnippetEditorController;
 
-@interface AppController : NSObject
+@interface AppController : NSObject <SPUUpdaterDelegate>
 {	
 	SnippetEditorController *snippetEditorController;
+	SPUStandardUpdaterController *updaterController;
 	
 //	NSOperationQueue *queue;
 	ProcessSerialNumber frontPSN;

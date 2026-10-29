@@ -19,3 +19,9 @@ DerivedData
 
 #CocoaPods
 Pods
+build/
+# Large vendored binaries (rebuild via script if missing)
+# Frameworks/*.framework are required locally to build
+Frameworks/_old_x86/
+*.xib.bw-backup
+*.nib.bw-backup

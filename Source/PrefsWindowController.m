@@ -19,7 +19,7 @@
 
 #import "PTHotKey.h"
 #import "PTHotKeyCenter.h"
-#import <ShortcutRecorder/SRRecorderControl.h>
+#import <ShortcutRecorder/ShortcutRecorder.h>
 
 
 #pragma mark Preference Keys
@@ -97,7 +97,7 @@ NSString *const CMPreferencePanelWillCloseNotification = @"CMPreferencePanelWill
 
 @interface PrefsWindowController ()
 - (void)_prepareHotKeys;
-- (void)_changeHotKeyByShortcutRecorder:(SRRecorderControl *)aRecorder withKeyCombo:(KeyCombo)keyCombo;
+- (void)_changeHotKeyByShortcutRecorder:(SRRecorderControl *)aRecorder withShortcut:(SRShortcut *)shortcut;
 - (void)_prepareFontSizePopUpMenuItems;
 - (NSArray *)_actionsFromNodes:(NSArray *)nodes;
 - (void)_prepareModifiersPopUpMenuItems;
@@ -317,15 +317,12 @@ BOOL sameBehaviors(id a, id b)
 //	return NO;
 //}
 
-- (void)shortcutRecorder:(SRRecorderControl *)aRecorder keyComboDidChange:(KeyCombo)newKeyCombo
+- (void)recorderControlDidEndRecording:(SRRecorderControl *)aRecorder
 {
-//	NSLog(@"aRecorder: %@", aRecorder);
-	
-	if ([shortcutRecorders containsObject:aRecorder])
-	{
-//		NSLog(@"keyComboDidChange: flags: %d, code: %d", newKeyCombo.code, newKeyCombo.flags);
-		[self _changeHotKeyByShortcutRecorder:aRecorder withKeyCombo:newKeyCombo];
+	if (![shortcutRecorders containsObject:aRecorder]) {
+		return;
 	}
+	[self _changeHotKeyByShortcutRecorder:aRecorder withShortcut:aRecorder.objectValue];
 }
 
 #pragma mark - NSTableView -
@@ -559,33 +556,32 @@ BOOL sameBehaviors(id a, id b)
 								 shortcutRecorder, historyShortCutRecorder, snippetsShortcutRecorder,
 								 nil];
 	[self setShortcutRecorders:recorders];
+
+	for (SRRecorderControl *recorder in recorders) {
+		recorder.delegate = self;
+	}
 	
 	NSDictionary *hotKeyMap = [CMUtilities hotKeyMap];
 	NSDictionary *hotKeyCombos = [[NSUserDefaults standardUserDefaults] objectForKey:CMPrefHotKeysKey];
 	for (NSString *identifier in hotKeyCombos) {
-//		NSLog(@"identifier: %@", identifier);
 		id keyComboPlist = [hotKeyCombos objectForKey:identifier];
-//		NSLog(@"keyComboPlist: %@", keyComboPlist);
-		
-		KeyCombo keyCombo;
-		keyCombo.code = [[keyComboPlist objectForKey:@"keyCode"] unsignedIntValue];
-		keyCombo.flags = [shortcutRecorder carbonToCocoaFlags:[[keyComboPlist objectForKey:@"modifiers"] unsignedIntValue]];
+		NSInteger keyCode = [[keyComboPlist objectForKey:@"keyCode"] integerValue];
+		UInt32 carbonModifiers = [[keyComboPlist objectForKey:@"modifiers"] unsignedIntValue];
+		NSEventModifierFlags cocoaFlags = SRCarbonToCocoaFlags(carbonModifiers);
+		SRShortcut *shortcut = [SRShortcut shortcutWithCode:(SRKeyCode)keyCode
+											  modifierFlags:cocoaFlags
+												 characters:nil
+							   charactersIgnoringModifiers:nil];
 		
 		NSUInteger index = [[[hotKeyMap objectForKey:identifier] objectForKey:kIndex] 
 							unsignedIntegerValue];		
 		SRRecorderControl *recorder = [recorders objectAtIndex:index];
-		[recorder setKeyCombo:keyCombo];		
-		[recorder setAnimates:YES];
+		recorder.objectValue = shortcut;
 	}
 }
 
-- (void)_changeHotKeyByShortcutRecorder:(SRRecorderControl *)aRecorder withKeyCombo:(KeyCombo)keyCombo
+- (void)_changeHotKeyByShortcutRecorder:(SRRecorderControl *)aRecorder withShortcut:(SRShortcut *)shortcut
 {
-//	NSLog(@"_changeHotKeyByShortcutRecorder: %@", aRecorder);
-
-	PTKeyCombo *newKeyCombo = [PTKeyCombo keyComboWithKeyCode:keyCombo.code
-													modifiers:[aRecorder cocoaToCarbonFlags:keyCombo.flags]];
-	
 	NSString *identifier = nil;
 	if (aRecorder == shortcutRecorder) {
 		identifier = kClipMenuIdentifier;
@@ -599,7 +595,14 @@ BOOL sameBehaviors(id a, id b)
 	else {
 		NSAssert(NO, @"Couldn't find the identifier of the recorder");
 	}
-//	NSLog(@"identifier: %@", identifier);
+
+	NSInteger keyCode = -1;
+	NSUInteger carbonModifiers = (NSUInteger)-1;
+	if (shortcut) {
+		keyCode = (NSInteger)shortcut.keyCode;
+		carbonModifiers = (NSUInteger)shortcut.carbonModifierFlags;
+	}
+	PTKeyCombo *newKeyCombo = [PTKeyCombo keyComboWithKeyCode:keyCode modifiers:carbonModifiers];
 	
 	PTHotKeyCenter *hotKeyCenter = [PTHotKeyCenter sharedCenter];
 	PTHotKey *oldHotKey = [hotKeyCenter hotKeyWithIdentifier:identifier];

@@ -536,7 +536,16 @@ NSUInteger numberOfLowerIndexes(NSIndexSet *indexes, NSUInteger currentIndex, NS
 		/* drag snippets to a folder */			
 		NSPasteboard *pboard = [info draggingPasteboard];
 		NSData *data = [pboard dataForType:kDraggedDataType];
-		NSIndexSet *rowIndexes = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+		NSError *error = nil;
+		NSIndexSet *rowIndexes = [NSKeyedUnarchiver unarchivedObjectOfClass:[NSIndexSet class]
+																   fromData:data
+																	  error:&error];
+		if (!rowIndexes) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+			rowIndexes = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+#pragma clang diagnostic pop
+		}
 		[snippetArrayController setSelectionIndexes:rowIndexes];
 //		NSLog(@"rowIndexes: %@", rowIndexes);
 		
@@ -606,7 +615,14 @@ NSUInteger numberOfLowerIndexes(NSIndexSet *indexes, NSUInteger currentIndex, NS
 	NSArray *draggedTypes = [NSArray arrayWithObject:kDraggedDataType];
 	[pboard declareTypes:draggedTypes owner:self];
 	
-	NSData *data = [NSKeyedArchiver archivedDataWithRootObject:rowIndexes];
+	NSError *error = nil;
+	NSData *data = [NSKeyedArchiver archivedDataWithRootObject:rowIndexes
+										 requiringSecureCoding:NO
+														 error:&error];
+	if (!data) {
+		NSLog(@"Failed to archive drag indexes: %@", error);
+		return NO;
+	}
 	[pboard setData:data forType:kDraggedDataType];
 	return YES;
 }
@@ -641,7 +657,16 @@ NSUInteger numberOfLowerIndexes(NSIndexSet *indexes, NSUInteger currentIndex, NS
 	
 	NSPasteboard *pboard = [info draggingPasteboard];
 	NSData *data = [pboard dataForType:kDraggedDataType];
-	NSIndexSet *rowIndexes = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+	NSError *error = nil;
+	NSIndexSet *rowIndexes = [NSKeyedUnarchiver unarchivedObjectOfClass:[NSIndexSet class]
+															   fromData:data
+																  error:&error];
+	if (!rowIndexes) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		rowIndexes = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+#pragma clang diagnostic pop
+	}
 //	NSLog(@"rowIndexes: %@", rowIndexes);
 	[snippetArrayController setSelectionIndexes:rowIndexes];
 	

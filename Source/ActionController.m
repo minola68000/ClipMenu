@@ -196,19 +196,19 @@ NSString *const saveFileName = @"actions.plist";
 	}
 	
 	NSString *plistPath = [path stringByAppendingPathComponent:saveFileName];
-	NSString *errorDescription;
+	NSError *error = nil;
 	
-	NSData *xmlData = [NSPropertyListSerialization dataFromPropertyList:plistArray
+	NSData *xmlData = [NSPropertyListSerialization dataWithPropertyList:plistArray
 																 format:NSPropertyListXMLFormat_v1_0
-													   errorDescription:&errorDescription];
+																options:0
+																  error:&error];
 	
 	if (xmlData) {
 		[xmlData writeToFile:plistPath atomically:YES];
 		return YES;
 	}
 	else {
-		NSLog(@"%@", errorDescription);
-		[errorDescription release], errorDescription = nil;
+		NSLog(@"%@", error);
 		return NO;
 	}
 }
@@ -228,12 +228,12 @@ NSString *const saveFileName = @"actions.plist";
 			return;
 		}	
 		
-		NSString *errorDescription;
+		NSError *error = nil;
 		
-		NSArray *plist = [NSPropertyListSerialization propertyListFromData:plistData
-														  mutabilityOption:NSPropertyListImmutable
+		NSArray *plist = [NSPropertyListSerialization propertyListWithData:plistData
+																   options:NSPropertyListImmutable
 																	format:NULL
-														  errorDescription:&errorDescription];
+																	 error:&error];
 		if (plist) {
 			NSMutableArray *unarhivedNodes = [NSMutableArray array];
 			
@@ -246,13 +246,25 @@ NSString *const saveFileName = @"actions.plist";
 			[self setActionNodes:unarhivedNodes];
 		}
 		else {
-			NSLog(@"%@", errorDescription);
-			[errorDescription release], errorDescription = nil;
+			NSLog(@"%@", error);
 		}
 	}
 	/* old format */
 	else if ([fileManager fileExistsAtPath:[self _saveFilePath]]) {
-		NSMutableArray *loadedData = [NSKeyedUnarchiver unarchiveObjectWithFile:[self _saveFilePath]];
+		NSData *legacyData = [NSData dataWithContentsOfFile:[self _saveFilePath]];
+		NSError *error = nil;
+		NSMutableArray *loadedData = nil;
+		if (legacyData) {
+			loadedData = [NSKeyedUnarchiver unarchivedObjectOfClass:[NSArray class]
+															fromData:legacyData
+															   error:&error];
+			if (!loadedData) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+				loadedData = [NSKeyedUnarchiver unarchiveObjectWithData:legacyData];
+#pragma clang diagnostic pop
+			}
+		}
 		if (loadedData == nil) {
 			//		NSLog(@"loadData is nil");
 			[self _prepareDefaultActionNodes];

@@ -12,7 +12,6 @@
 
 #import "PTHotKey.h"
 #import "PTHotKeyCenter.h"
-#import <Sparkle/Sparkle.h>
 
 
 @interface AppController ()
@@ -219,6 +218,7 @@ NSDictionary *_storeTypesDictionary()
 	[[ClipsController sharedInstance] removeObserver:self
 										  forKeyPath:@"clips"];
 	
+	[updaterController release], updaterController = nil;
 //	[queue release], queue = nil;
 	
 	[super dealloc];
@@ -264,6 +264,14 @@ NSDictionary *_storeTypesDictionary()
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
 //	NSLog(@"observeValueForKeyPath: %@, change: %@", keyPath, change);
+
+	/* AppKit UI / Carbon hotkeys must run on the main thread (deadlock risk otherwise). */
+	if (![NSThread isMainThread]) {
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[self observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+		});
+		return;
+	}
 	
 	if ([keyPath isEqualToString:@"clips"]) {
 		[[MenuController sharedInstance] updateStatusMenu];
@@ -293,31 +301,15 @@ NSDictionary *_storeTypesDictionary()
 {	
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	
-//	NSTimeInterval start = [NSDate timeIntervalSinceReferenceDate];
-	
-	NSOperationQueue *queue = [[NSOperationQueue alloc] init];
-	NSOperation *operation;
-	
-	/* load clips */
-	operation = [[NSInvocationOperation alloc] initWithTarget:[ClipsController sharedInstance]
-													 selector:@selector( loadClips )
-													   object:nil];
-	[queue addOperation:operation];
-	[operation release], operation = nil;
-	
-	/* load actions */
-	operation = [[NSInvocationOperation alloc] initWithTarget:[ActionController sharedInstance]
-													 selector:@selector( loadActions )
-													   object:nil];
-	[queue addOperation:operation];
-	[operation release], operation = nil;
-	
-	/* register hot-keys */
-	operation = [[NSInvocationOperation alloc] initWithTarget:self
-													 selector:@selector( _registerHotKeys )
-													   object:nil];
-	[queue addOperation:operation];
-	[operation release], operation = nil;	
+	/*
+	 * Launch must stay on the main thread.
+	 * The old NSOperationQueue + waitUntilAllOperationsAreFinished pattern deadlocks on
+	 * modern AppKit: loadClips KVO rebuilds NSMenu while the main thread is blocked waiting.
+	 */
+	[[ClipsController sharedInstance] loadClips];
+	[[ActionController sharedInstance] loadActions];
+	[self _registerHotKeys];
+	[[MenuController sharedInstance] updateStatusMenu];
 	
 	/* ask to register as login item */
 	if (([defaults boolForKey:CMPrefLoginItemKey] == NO) &&
@@ -325,27 +317,21 @@ NSDictionary *_storeTypesDictionary()
 		[self _promptToAddLoginItems];
 	}
 		
-	/* Sparkle updater */	
-	SUUpdater *updater = [SUUpdater sharedUpdater];	
-	
-	[self _toggleCheckPreReleaseUpdates:[defaults boolForKey:CMEnableAutomaticCheckPreReleaseKey]];
-
-	[updater setAutomaticallyChecksForUpdates:[defaults boolForKey:CMEnableAutomaticCheckKey]];
-	[updater setUpdateCheckInterval:[defaults integerForKey:CMUpdateCheckIntervalKey]];
+	/* Sparkle 2 updater (replaces legacy SUUpdater sharedUpdater) */
+	if (!updaterController) {
+		updaterController = [[SPUStandardUpdaterController alloc]
+							 initWithStartingUpdater:YES
+							 updaterDelegate:self
+							 userDriverDelegate:nil];
+	}
+	SPUUpdater *updater = updaterController.updater;
+	updater.automaticallyChecksForUpdates = [defaults boolForKey:CMEnableAutomaticCheckKey];
+	updater.updateCheckInterval = [defaults integerForKey:CMUpdateCheckIntervalKey];
 	
 	[defaults addObserver:self
 			   forKeyPath:CMEnableAutomaticCheckPreReleaseKey
 				  options:NSKeyValueObservingOptionNew
 				  context:nil];
-	
-	/* Finish all operations */
-	[queue waitUntilAllOperationsAreFinished];
-	[queue release], queue = nil;
-	
-//	NSTimeInterval end = [NSDate timeIntervalSinceReferenceDate];
-//	NSLog(@"result: %f", (end - start));
-	
-//	[self showSnippetEditor:self];	// temp!!!
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification
@@ -542,13 +528,20 @@ NSDictionary *_storeTypesDictionary()
 
 - (void)_toggleCheckPreReleaseUpdates:(BOOL)flag
 {
-	NSString *feed = (flag)
-	? [CMUtilities infoValueForKey:@"SUPreReleaseFeedURL"]
-	: [CMUtilities infoValueForKey:@"SUFeedURL"];
-	
-	NSURL *feedURL = [[NSURL alloc] initWithString:feed];
-	[[SUUpdater sharedUpdater] setFeedURL:feedURL];
-	[feedURL release], feedURL = nil;
+	/* Feed URL is provided dynamically via SPUUpdaterDelegate. */
+	(void)flag;
+	[updaterController.updater resetUpdateCycle];
+}
+
+#pragma mark - SPUUpdaterDelegate -
+
+- (nullable NSString *)feedURLStringForUpdater:(SPUUpdater *)updater
+{
+	BOOL preRelease = [[NSUserDefaults standardUserDefaults] boolForKey:CMEnableAutomaticCheckPreReleaseKey];
+	NSString *feed = preRelease
+		? [CMUtilities infoValueForKey:@"SUPreReleaseFeedURL"]
+		: [CMUtilities infoValueForKey:@"SUFeedURL"];
+	return feed;
 }
 
 #pragma mark - Login Item -
