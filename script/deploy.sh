@@ -10,7 +10,7 @@ file_dir=$pwd/$dirname
 folder="ClipMenu"
 target_path=~/Desktop/$folder
 
-app="ClipMenu.app"
+app="ClipMenuNeo.app"
 app_path="$file_dir/../build/Release/$app"
 readme="ReadMe.rtfd"
 readme_path="$file_dir/../doc/$readme"

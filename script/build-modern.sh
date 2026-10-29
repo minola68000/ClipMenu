@@ -21,7 +21,7 @@ xcodebuild \
   OTHER_LDFLAGS="-ObjC" \
   build
 
-APP="$ROOT/build/Release/ClipMenu.app"
+APP="$ROOT/build/Release/ClipMenuNeo.app"
 mkdir -p "$APP/Contents/Frameworks"
 for fw in ShortcutRecorder Sparkle BWToolkitFramework; do
   rm -rf "$APP/Contents/Frameworks/$fw.framework"
@@ -37,6 +37,6 @@ cp -f "$ROOT/Japanese.lproj/SnippetEditor.nib" "$APP/Contents/Resources/Japanese
 
 codesign --force --deep -s - "$APP"
 echo "Built: $APP"
-file "$APP/Contents/MacOS/ClipMenu"
-lipo -info "$APP/Contents/MacOS/ClipMenu"
+file "$APP/Contents/MacOS/ClipMenuNeo"
+lipo -info "$APP/Contents/MacOS/ClipMenuNeo"
 defaults read "$APP/Contents/Info" CFBundleShortVersionString

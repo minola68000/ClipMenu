@@ -18,7 +18,7 @@ The original author’s distribution request still applies:
 
 **How this fork handles that:**
 
-- The product is named **ClipMenuNeo** and uses its own Bundle ID `io.github.minola68000.ClipMenuNeo` (same approach as CleanArchiverNeo). The app bundle file is still `ClipMenu.app`.
+- The product is named **ClipMenuNeo** and uses its own Bundle ID `io.github.minola68000.ClipMenuNeo` (same approach as CleanArchiverNeo). The app bundle is `ClipMenuNeo.app`.
 - Preferences and history of the original `com.naotaka.ClipMenu` are **not** carried over, and macOS permissions (Accessibility / Input Monitoring) must be granted again.
 - If you redistribute a further derivative (store listing, commercial product, etc.), change the product name and Bundle ID and keep MIT attribution.
 
@@ -50,7 +50,7 @@ Frameworks expected under `Frameworks/` (Sparkle, ShortcutRecorder, BWToolkitFra
 
 ```sh
 ./script/build-modern.sh
-# optional: build and replace /Applications/ClipMenu.app
+# optional: build and replace /Applications/ClipMenuNeo.app
 ./script/install-modern.sh
 ```
 

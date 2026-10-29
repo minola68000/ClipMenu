@@ -31,7 +31,7 @@ NSString *const clipTextKey = @"clipText";
 /* - fileInfo - */
 NSString *const filenameKey = @"filename";
 NSString *const filePathKey = @"filePath";
-NSString *const resourcePathSeparator = @"ClipMenu.app/Contents/Resources/";
+NSString *const resourcePathSeparator = @"Contents/Resources/";
 NSString *const saveFileName = @"actions.plist";
 
 

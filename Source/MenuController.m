@@ -2235,7 +2235,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 		statusIconPressed = statusIcon;
 	}
 	
-	NSString *toolTipLabel = [NSString stringWithFormat:@"%@ %@", kApplicationName, self.shortVersion];
+	NSString *toolTipLabel = [NSString stringWithFormat:@"%@ %@", @"ClipMenuNeo", self.shortVersion];
 	
 	NSStatusBar *statusBar = [NSStatusBar systemStatusBar];
 	

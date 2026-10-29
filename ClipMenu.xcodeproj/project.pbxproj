@@ -247,7 +247,7 @@
 		35C028DB0D683C0200B95FF5 /* ActionIconLarge.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; name = ActionIconLarge.tiff; path = resource/ActionIconLarge.tiff; sourceTree = "<group>"; };
 		35C02FFA0D6BAB8300B95FF5 /* script */ = {isa = PBXFileReference; lastKnownFileType = folder; name = script; path = resource/script; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8D1107320486CEB800E47090 /* ClipMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D1107320486CEB800E47090 /* ClipMenuNeo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenuNeo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A821F5401085696E00B25C8B /* dsa_pub.pem */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = dsa_pub.pem; path = resource/dsa_pub.pem; sourceTree = "<group>"; };
 		A821F5861085DA8A00B25C8B /* Japanese */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Japanese; path = Japanese.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A82348FB10BFDEB00045C1F4 /* ImageAndTextCell.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ImageAndTextCell.h; path = Source/CocoaExtensions/ImageAndTextCell.h; sourceTree = "<group>"; };
@@ -257,7 +257,7 @@
 		A8234A5010AA9F8200EB250C /* English */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/SnippetEditor.strings; sourceTree = "<group>"; };
 		A8234A6910AAA05E00EB250C /* Japanese */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Japanese; path = Japanese.lproj/SnippetEditor.strings; sourceTree = "<group>"; };
 		A82B8A460EC3DD0A00096102 /* English */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/Preferences.strings; sourceTree = "<group>"; };
-		A82B8AEB0EC3F8D700096102 /* ClipMenu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A82B8AEB0EC3F8D700096102 /* ClipMenuNeo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipMenuNeo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8328DCC108859AE00A54DF4 /* ShortcutRecorder.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ShortcutRecorder.framework; path = Frameworks/ShortcutRecorder.framework; sourceTree = "<group>"; };
 		A8328E0A10885FAF00A54DF4 /* DBPrefsWindowController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DBPrefsWindowController.h; sourceTree = "<group>"; };
 		A8328E0B10885FAF00A54DF4 /* DBPrefsWindowController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DBPrefsWindowController.m; sourceTree = "<group>"; };
@@ -412,8 +412,8 @@
 		19C28FACFE9D520D11CA2CBB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				8D1107320486CEB800E47090 /* ClipMenu.app */,
-				A82B8AEB0EC3F8D700096102 /* ClipMenu.app */,
+				8D1107320486CEB800E47090 /* ClipMenuNeo.app */,
+				A82B8AEB0EC3F8D700096102 /* ClipMenuNeo.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -671,7 +671,7 @@
 			name = ClipMenu;
 			productInstallPath = "$(HOME)/Applications";
 			productName = ClipMenu;
-			productReference = 8D1107320486CEB800E47090 /* ClipMenu.app */;
+			productReference = 8D1107320486CEB800E47090 /* ClipMenuNeo.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A82B8AB20EC3F8D700096102 /* ClipMenu (deployment) */ = {
@@ -691,7 +691,7 @@
 			name = "ClipMenu (deployment)";
 			productInstallPath = "$(HOME)/Applications";
 			productName = ClipMenu;
-			productReference = A82B8AEB0EC3F8D700096102 /* ClipMenu.app */;
+			productReference = A82B8AEB0EC3F8D700096102 /* ClipMenuNeo.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -1012,7 +1012,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				PRODUCT_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenuNeo;
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SDKROOT = macosx;
 				WRAPPER_EXTENSION = app;
@@ -1049,7 +1049,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				PRODUCT_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenuNeo;
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SDKROOT = macosx;
 				WRAPPER_EXTENSION = app;
@@ -1086,7 +1086,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				PRODUCT_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenuNeo;
 				RUN_CLANG_STATIC_ANALYZER = NO;
 				SDKROOT = macosx;
 				WRAPPER_EXTENSION = app;
@@ -1122,7 +1122,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				PRODUCT_NAME = ClipMenu;
+				PRODUCT_NAME = ClipMenuNeo;
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SDKROOT = macosx;
 				WRAPPER_EXTENSION = app;

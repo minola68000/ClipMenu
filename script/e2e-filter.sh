@@ -2,8 +2,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/script/build-modern.sh"
-APP="$ROOT/build/Release/ClipMenu.app"
-BIN="$APP/Contents/MacOS/ClipMenu"
+APP="$ROOT/build/Release/ClipMenuNeo.app"
+BIN="$APP/Contents/MacOS/ClipMenuNeo"
 echo "==> Running filter E2E (--self-test-filter)"
 set +e
 OUT="$("$BIN" --self-test-filter 2>&1)"
