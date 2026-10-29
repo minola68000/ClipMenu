@@ -5,10 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_SRC="$ROOT/build/Release/ClipMenu.app"
 pkill -f 'ClipMenu.app/Contents/MacOS/ClipMenu' || true
 sleep 1
-STAMP=$(date +%Y%m%d-%H%M%S)
-if [ -d /Applications/ClipMenu.app ]; then
-  mv /Applications/ClipMenu.app "/Applications/ClipMenu.app.pre-modern-$STAMP"
-fi
+# Replace in place; do not leave backup copies in /Applications (they show up in Launchpad / Spotlight).
+rm -rf /Applications/ClipMenu.app
 cp -R "$APP_SRC" /Applications/ClipMenu.app
 xattr -dr com.apple.quarantine /Applications/ClipMenu.app 2>/dev/null || true
 # Stable Apple Development identity — ad-hoc re-sign breaks Accessibility TCC every install.
