@@ -2,13 +2,16 @@
 //  main.m
 //  ClipMenu
 //
-//  Created by Naotaka Morimoto on 07/12/01.
-//  Copyright Naotaka Morimoto 2007. All rights reserved.
-//
 
 #import <Cocoa/Cocoa.h>
+#import "MenuController.h"
 
 int main(int argc, char *argv[])
 {
-    return NSApplicationMain(argc,  (const char **) argv);
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--self-test-filter") == 0) {
+			return [MenuController runFilterE2ETest];
+		}
+	}
+	return NSApplicationMain(argc, (const char **)argv);
 }

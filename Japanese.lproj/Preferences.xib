@@ -62,7 +62,7 @@
 				<string key="NSTreeContentLeafKey">isLeaf</string>
 			</object>
 			<object class="NSCustomObject" id="563393011">
-				<string key="NSClassName">SUUpdater</string>
+				<string key="NSClassName">CMUpdater</string>
 			</object>
 			<object class="NSArrayController" id="962001738">
 				<array class="NSMutableArray" key="NSDeclaredKeys">

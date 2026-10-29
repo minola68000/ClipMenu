@@ -17,7 +17,8 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=YES \
   LD_RUNPATH_SEARCH_PATHS="@executable_path/../Frameworks" \
   FRAMEWORK_SEARCH_PATHS="$ROOT/Frameworks" \
-  HEADER_SEARCH_PATHS="$ROOT/Source $ROOT/Source/NaoAdditions" \
+  HEADER_SEARCH_PATHS="$ROOT/Source $ROOT/Source/NaoAdditions $ROOT/Source/Compatibility" \
+  OTHER_LDFLAGS="-ObjC" \
   build
 
 APP="$ROOT/build/Release/ClipMenu.app"

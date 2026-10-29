@@ -193,3 +193,7 @@
 
 "Surround with" = "囲む";
 "Surround with (Japanese)" = "囲む（全角）";
+"Automatic updates are disabled in this maintenance fork." = "このメンテナンスフォークでは自動アップデートは無効です。";
+"Type to filter history" = "入力して履歴を絞り込み";
+"History (filtered: %lu)" = "履歴（絞り込み: %lu件）";
+"No matching clips" = "一致するクリップはありません";

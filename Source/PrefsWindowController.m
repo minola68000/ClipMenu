@@ -20,6 +20,10 @@
 #import "PTHotKey.h"
 #import "PTHotKeyCenter.h"
 #import <ShortcutRecorder/ShortcutRecorder.h>
+#import "Compatibility/SRRecorderCell.h"
+#import "Compatibility/CMUpdater.h"
+#import "Compatibility/NSObject+CMHasFolders.h"
+#import "Compatibility/SnippetPrefsController.h"
 
 
 #pragma mark Preference Keys
@@ -175,6 +179,12 @@ BOOL sameBehaviors(id a, id b)
 - (void)awakeFromNib
 {
 //	NSLog(@"awakeFromNib");
+
+	/* Keep SRRecorderCell linked for decoding Preferences.nib (SR3 removed it). */
+	[SRRecorderCell class];
+	[CMUpdater class];
+	(void)[(NSObject *)self hasFolders];
+	[SnippetPrefsController class];
 		
 	[actionNodeController handleAwakeFromNib];
 	
@@ -501,8 +511,6 @@ BOOL sameBehaviors(id a, id b)
 /* Override */
 - (IBAction)showWindow:(id)sender 
 {
-//	NSLog(@"showWindow");
-	
 	[super showWindow:sender];
 	[NSApp activateIgnoringOtherApps:YES];
 	[[self window] makeKeyAndOrderFront:self];
@@ -552,9 +560,10 @@ BOOL sameBehaviors(id a, id b)
 
 - (void)_prepareHotKeys
 {
-	NSMutableArray *recorders = [NSMutableArray arrayWithObjects:
-								 shortcutRecorder, historyShortCutRecorder, snippetsShortcutRecorder,
-								 nil];
+	NSMutableArray *recorders = [NSMutableArray array];
+	if (shortcutRecorder) { [recorders addObject:shortcutRecorder]; }
+	if (historyShortCutRecorder) { [recorders addObject:historyShortCutRecorder]; }
+	if (snippetsShortcutRecorder) { [recorders addObject:snippetsShortcutRecorder]; }
 	[self setShortcutRecorders:recorders];
 
 	for (SRRecorderControl *recorder in recorders) {
@@ -564,6 +573,11 @@ BOOL sameBehaviors(id a, id b)
 	NSDictionary *hotKeyMap = [CMUtilities hotKeyMap];
 	NSDictionary *hotKeyCombos = [[NSUserDefaults standardUserDefaults] objectForKey:CMPrefHotKeysKey];
 	for (NSString *identifier in hotKeyCombos) {
+		NSDictionary *mapEntry = [hotKeyMap objectForKey:identifier];
+		if (!mapEntry) { continue; }
+		NSUInteger index = [[mapEntry objectForKey:kIndex] unsignedIntegerValue];
+		if (index >= [recorders count]) { continue; }
+
 		id keyComboPlist = [hotKeyCombos objectForKey:identifier];
 		NSInteger keyCode = [[keyComboPlist objectForKey:@"keyCode"] integerValue];
 		UInt32 carbonModifiers = [[keyComboPlist objectForKey:@"modifiers"] unsignedIntValue];
@@ -572,9 +586,6 @@ BOOL sameBehaviors(id a, id b)
 											  modifierFlags:cocoaFlags
 												 characters:nil
 							   charactersIgnoringModifiers:nil];
-		
-		NSUInteger index = [[[hotKeyMap objectForKey:identifier] objectForKey:kIndex] 
-							unsignedIntegerValue];		
 		SRRecorderControl *recorder = [recorders objectAtIndex:index];
 		recorder.objectValue = shortcut;
 	}

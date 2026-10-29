@@ -7,6 +7,9 @@
 //
 
 #import "MenuController.h"
+#import "CMFilterHeaderView.h"
+#import <Carbon/Carbon.h>
+#import <ApplicationServices/ApplicationServices.h>
 #import "constants.h"
 #import "ActionController.h"
 #import "ActionNode.h"
@@ -16,6 +19,87 @@
 #import "SnippetEditorController.h"
 #import "PrefsWindowController.h"
 #import "NSString+NaoAdditions.h"
+
+/* Prefix menu titles so NSMenu type-ahead does not steal filter keystrokes. */
+static NSString *const kCMTypeaheadMutePrefix = @"\ufeff";
+
+static EventHandlerRef sCMFilterCarbonHandler = NULL;
+
+/* Debug logging is opt-in (set CLIPMENU_FILTER_LOG=/path/to/file): it records typed text. */
+static void CMFilterLog(NSString *fmt, ...)
+{
+	const char *logPath = getenv("CLIPMENU_FILTER_LOG");
+	if (!logPath || !*logPath) {
+		return;
+	}
+	va_list ap;
+	va_start(ap, fmt);
+	NSString *line = [[NSString alloc] initWithFormat:fmt arguments:ap];
+	va_end(ap);
+	FILE *f = fopen(logPath, "a");
+	if (f) {
+		NSString *ts = [[NSDate date] description];
+		fprintf(f, "%s %s\n", [ts UTF8String], [line UTF8String]);
+		fclose(f);
+	}
+	[line release];
+}
+
+static CFMachPortRef sCMFilterEventTap = NULL;
+static CFRunLoopSourceRef sCMFilterTapSource = NULL;
+static BOOL sCMFilterDidPromptAX = NO;
+static BOOL sCMFilterDidRequestListen = NO;
+/* Items added to the menu while filtering (matches re-packed from the top). */
+static NSMutableArray *sCMFilterResultItems = nil;
+static CGFloat sCMHistorySubmenuWidth = 0;
+
+static CGEventRef CMFilterMenuCGEventTapCallback(CGEventTapProxy proxy,
+												 CGEventType type,
+												 CGEventRef event,
+												 void *refcon)
+{
+	(void)proxy;
+	MenuController *controller = (MenuController *)refcon;
+	if (!controller) {
+		return event;
+	}
+	if (type == kCGEventTapDisabledByTimeout ||
+		type == kCGEventTapDisabledByUserInput) {
+		if (sCMFilterEventTap) {
+			CGEventTapEnable(sCMFilterEventTap, true);
+		}
+		return event;
+	}
+	if (type != kCGEventKeyDown) {
+		return event;
+	}
+	NSEvent *nsEvent = [NSEvent eventWithCGEvent:event];
+	if (!nsEvent) {
+		return event;
+	}
+	NSEvent *passed = [controller _handleClipFilterKeyEvent:nsEvent];
+	if (passed == nil) {
+		return NULL;
+	}
+	return event;
+}
+
+@interface MenuController (CarbonFilterPrivate)
+- (OSStatus)_carbonHandleFilterEvent:(EventRef)event;
+- (NSEvent *)_handleClipFilterKeyEvent:(NSEvent *)event;
+@end
+
+static OSStatus CMFilterCarbonEventHandler(EventHandlerCallRef callRef, EventRef event, void *userData)
+{
+	(void)callRef;
+	MenuController *controller = (MenuController *)userData;
+	if (!controller) {
+		return eventNotHandledErr;
+	}
+	UInt32 kc = 0;
+	GetEventParameter(event, kEventParamKeyCode, typeUInt32, NULL, sizeof(kc), NULL, &kc);
+	return [controller _carbonHandleFilterEvent:event];
+}
 
 
 //#define INLINE_CLIPS_DISPLAY_NUMBER 10
@@ -201,6 +285,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 //- (BOOL)_isAppropriateAction:(NSDictionary *)action;
 
 - (void)_changeStatusItem:(NSUInteger)tag;
+- (void)statusBarButtonClicked:(id)sender;
 - (void)_removeStatusItem;
 - (void)_refreshStatusItem;
 
@@ -220,6 +305,28 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)_handlePreferencePanelWillClose:(NSNotification *)aNotification;
 - (void)_handleSnippetEditorWillClose:(NSNotification *)aNotification;
 - (void)_handleStatusMenuWillUpdate:(NSNotification *)aNotification;
+
+
+- (void)_addClipFilterFieldToMenu:(NSMenu *)aMenu;
+- (BOOL)_clip:(Clip *)clip matchesFilter:(NSString *)filter;
+- (void)_updatePendingClipFilter:(NSString *)filter applyImmediately:(BOOL)immediate;
+- (void)_cancelClipFilterDebounce;
+- (void)_applyPendingClipFilter;
+- (void)_applyFilterVisibilityToMenu:(NSMenu *)menu;
+- (void)_rebuildFilterResultsInMenu:(NSMenu *)menu filter:(NSString *)filter;
+- (BOOL)_isHistoryClipItem:(NSMenuItem *)item;
+- (NSString *)_excerptOfClip:(Clip *)clip forFilter:(NSString *)filter;
+- (void)_highlightFilter:(NSString *)filter inMenuItem:(NSMenuItem *)item;
+- (BOOL)_isHistoryFolderItem:(NSMenuItem *)item;
+- (void)_startClipFilterMonitor;
+- (void)_stopClipFilterMonitor;
+- (NSEvent *)_handleClipFilterKeyEvent:(NSEvent *)event;
+- (NSString *)_typeaheadMutedTitle:(NSString *)title;
+- (void)_installCarbonFilterHandler;
+- (void)_removeCarbonFilterHandler;
+- (OSStatus)_carbonHandleFilterEvent:(EventRef)event;
+- (BOOL)_menuIsUnderActiveFilter:(NSMenu *)menu;
+- (IBAction)_clipFilterIgnore:(id)sender;
 
 - (id)_init;
 @end
@@ -327,6 +434,12 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	[defaults removeObserver:self
 				  forKeyPath:CMPrefMenuIconSizeKey];
 	
+	[self _stopClipFilterMonitor];
+	[self _cancelClipFilterDebounce];
+	[clipFilterString release], clipFilterString = nil;
+	[pendingClipFilterString release], pendingClipFilterString = nil;
+	activeFilterMenu = nil;
+	clipFilterHeader = nil;
 	
 	[clipMenu release], clipMenu = nil;
 	[dummyWindow release], dummyWindow = nil;
@@ -392,6 +505,55 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 //	[[NSNotificationCenter defaultCenter] postNotificationName:CMClipMenuWillPopUpNotification object:nil];
 //}
 
+/* Submenu direction depends on its width; fix widths so filtering doesn't flip it. */
+- (void)_lockWidthOfMenu:(NSMenu *)menu
+{
+	[menu setMinimumWidth:0];
+	[menu setMinimumWidth:[menu size].width];
+	for (NSMenuItem *mi in [menu itemArray]) {
+		if ([mi hasSubmenu]) {
+			[self _lockWidthOfMenu:[mi submenu]];
+		}
+	}
+}
+
+- (void)_unlockWidthOfMenu:(NSMenu *)menu
+{
+	[menu setMinimumWidth:0];
+	for (NSMenuItem *mi in [menu itemArray]) {
+		if ([mi hasSubmenu]) {
+			[self _unlockWidthOfMenu:[mi submenu]];
+		}
+	}
+}
+
+- (void)menuWillOpen:(NSMenu *)menu
+{
+	NSString *title = [menu title];
+	if ([title isEqualToString:kClipMenuIdentifier] ||
+		[title isEqualToString:kHistoryMenuIdentifier]) {
+		activeFilterMenu = menu;
+		clipFilterHeader = nil;
+		for (NSMenuItem *mi in [menu itemArray]) {
+			if ([[mi view] isKindOfClass:[CMFilterHeaderView class]]) {
+				clipFilterHeader = (CMFilterHeaderView *)[mi view];
+				break;
+			}
+		}
+		/* Keep the width fixed while filtering so submenus don't flip direction. */
+		[self _lockWidthOfMenu:menu];
+		sCMHistorySubmenuWidth = 0;
+		for (NSMenuItem *mi in [menu itemArray]) {
+			if ([self _isHistoryFolderItem:mi] && sCMHistorySubmenuWidth < [[mi submenu] minimumWidth]) {
+				sCMHistorySubmenuWidth = [[mi submenu] minimumWidth];
+			}
+		}
+		CMFilterLog(@"[ClipMenu] menuWillOpen title=%@ header=%@", title, clipFilterHeader);
+		[self _updatePendingClipFilter:@"" applyImmediately:YES];
+		[self _startClipFilterMonitor];
+	}
+}
+
 - (void)menu:(NSMenu *)menu willHighlightItem:(NSMenuItem *)item
 {
 	if (highlightedMenuItem && ![item isEqualTo:highlightedMenuItem]) {
@@ -413,6 +575,13 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	if (highlightedMenuItem) {
 		[self _unhighlightMenuItem];
 	}
+	if (menu == activeFilterMenu) {
+		[self _stopClipFilterMonitor];
+		[self _unlockWidthOfMenu:menu];
+		activeFilterMenu = nil;
+		clipFilterHeader = nil;
+		[self _updatePendingClipFilter:@"" applyImmediately:YES];
+	}
 }
 
 #pragma mark -
@@ -425,6 +594,16 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 										integerForKey:CMPrefShowStatusItemKey];
 		
 		[self _changeStatusItem:statusMenuIconTag];
+	}
+	static BOOL sPopObserver = NO;
+	if (!sPopObserver) {
+		sPopObserver = YES;
+		[[NSDistributedNotificationCenter defaultCenter]
+		 addObserver:self
+			selector:@selector(statusBarButtonClicked:)
+				name:@"com.naotaka.ClipMenu.popMenu"
+			  object:nil
+		suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
 	}
 }
 
@@ -443,9 +622,41 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 //		[self _resetMenuIconSize];		// XXX Need to modify?
 		
 		[self _buildClipMenu];
-		[statusItem setMenu:clipMenu];
+		/*
+		 * Do not assign statusItem.menu on modern macOS: Control Center hosts it
+		 * out-of-process and keystrokes never reach our filter / CGEventTap.
+		 * Pop the menu in-process from the status button action instead.
+		 */
+		[statusItem setMenu:nil];
+		if ([statusItem respondsToSelector:@selector(button)] && statusItem.button) {
+			statusItem.button.target = self;
+			statusItem.button.action = @selector(statusBarButtonClicked:);
+			[statusItem.button sendActionOn:NSEventMaskLeftMouseDown];
+		}
 	}
 }
+
+- (void)statusBarButtonClicked:(id)sender
+{
+	(void)sender;
+	if (!clipMenu) {
+		[self _buildClipMenu];
+	}
+	NSStatusBarButton *button = nil;
+	if ([statusItem respondsToSelector:@selector(button)]) {
+		button = statusItem.button;
+	}
+	if (!button || !clipMenu) {
+		return;
+	}
+	CMFilterLog(@"[ClipMenu] statusBarButtonClicked — in-process popUp");
+	[button highlight:YES];
+	[clipMenu popUpMenuPositioningItem:nil
+	                        atLocation:NSMakePoint(0, NSHeight([button bounds]) + 2.0)
+	                            inView:button];
+	[button highlight:NO];
+}
+
 
 - (void)popUpMenuForType:(CMPopUpMenuType)type
 {
@@ -523,6 +734,10 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 {
 	NSMenu *newMenu = [[NSMenu allocWithZone:[NSMenu menuZone]] initWithTitle:kClipMenuIdentifier];
 	[newMenu setDelegate:self];
+	/* Own incremental filter — never let NSMenu type-ahead steal digit/letter keys. */
+	if ([newMenu respondsToSelector:@selector(setAllowsTypeSelect:)]) {
+		[newMenu setAllowsTypeSelect:NO];
+	}
 	
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	CMPositionOfSnippets positionOfSnippets = [defaults integerForKey:CMPrefPositionOfSnippetsKey];
@@ -573,10 +788,11 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	ClipsController *clipsController = [ClipsController sharedInstance];
 	NSArray *clips = [clipsController sortedClips];
 	NSUInteger currentSize = [clips count];
+	if (maxHistory < currentSize) {
+		currentSize = maxHistory;
+	}
 	
-	//	if (currentSize < maxHistory) {
-	//		maxHistory = currentSize;
-	//	}
+	[self _addClipFilterFieldToMenu:aMenu];
 	
 	if (showLabelsInMenu) {
 		NSMenuItem *labelItem = [[NSMenuItem allocWithZone:[NSMenu menuZone]]
@@ -596,7 +812,8 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	
 	NSUInteger i = 0;
 	
-	for (Clip *clip in clips) {		
+	for (i = 0; i < currentSize; i++) {
+		Clip *clip = [clips objectAtIndex:i];
 		//		NSLog(@"CHECK i: %d", i);
 		
 		if ((numberOfItemsPlaceInline < 1) ||
@@ -630,32 +847,728 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 			NSMenuItem *menuItem = [self _makeMenuItemForClip:clip
 													withCount:i
 												andListNumber:listNumber];
+			[menuItem setTag:i];
 			[submenu addItem:menuItem];
 			
 			listNumber = incrementListNumber(listNumber, numberOfItemsPlaceInsideFolder, firstIndex);
 		}
 		else {												
 			/* display clips inline */
-			NSMenuItem *menuItem = [self _makeMenuItemForClip:clip 
+			NSMenuItem *menuItem = [self _makeMenuItemForClip:clip
 													withCount:i
 												andListNumber:listNumber];
+			[menuItem setTag:i];
 			[aMenu addItem:menuItem];
 			
 			listNumber = incrementListNumber(listNumber, numberOfItemsPlaceInline, firstIndex);
 		}
 		
-		i++;
-		//		listNumber = incrementListNumber(listNumber, numberOfItemsPlaceInsideFolder);
-		if (i == (submenuCount + numberOfItemsPlaceInsideFolder)) {
+		if ((i + 1) == (submenuCount + numberOfItemsPlaceInsideFolder)) {
 			submenuCount += numberOfItemsPlaceInsideFolder;
 			submenuIndex++;
 		}
-		
-		if (maxHistory <= i) {
-			break;
+	}
+}
+
+#pragma mark - Clip filter -
+
+- (NSString *)_typeaheadMutedTitle:(NSString *)title
+{
+	if (!title) {
+		return kCMTypeaheadMutePrefix;
+	}
+	return [kCMTypeaheadMutePrefix stringByAppendingString:title];
+}
+
+- (void)_addClipFilterFieldToMenu:(NSMenu *)aMenu
+{
+	CMFilterHeaderView *header = [[[CMFilterHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)] autorelease];
+	header.delegate = self;
+	NSString *shown = pendingClipFilterString ? pendingClipFilterString
+		: (clipFilterString ? clipFilterString : kEmptyString);
+	[header setQueryDisplay:shown];
+	clipFilterHeader = header;
+	
+	NSMenuItem *fieldItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]] init] autorelease];
+	[fieldItem setTitle:kEmptyString];
+	[fieldItem setView:header];
+	[aMenu addItem:fieldItem];
+}
+
+- (BOOL)_clip:(Clip *)clip matchesFilter:(NSString *)filter
+{
+	if ([filter length] == 0) {
+		return YES;
+	}
+	NSStringCompareOptions opts = NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSDiacriticInsensitiveSearch;
+	NSString *stringValue = [clip stringValue];
+	if ([stringValue length] > 0 &&
+		[stringValue rangeOfString:filter options:opts].location != NSNotFound) {
+		return YES;
+	}
+	for (NSString *filename in [clip filenames]) {
+		if ([filename isKindOfClass:[NSString class]] &&
+			[filename rangeOfString:filter options:opts].location != NSNotFound) {
+			return YES;
+		}
+	}
+	for (id urlObj in [clip URL]) {
+		NSString *urlString = nil;
+		if ([urlObj isKindOfClass:[NSURL class]]) {
+			urlString = [(NSURL *)urlObj absoluteString];
+		} else if ([urlObj isKindOfClass:[NSString class]]) {
+			urlString = urlObj;
+		}
+		if ([urlString length] > 0 &&
+			[urlString rangeOfString:filter options:opts].location != NSNotFound) {
+			return YES;
+		}
+	}
+	return NO;
+}
+
+- (void)_updatePendingClipFilter:(NSString *)filter applyImmediately:(BOOL)immediate
+{
+	NSString *normalized = filter ? filter : kEmptyString;
+	if (pendingClipFilterString == nil || ![pendingClipFilterString isEqualToString:normalized]) {
+		[pendingClipFilterString release];
+		pendingClipFilterString = [normalized copy];
+	}
+	if (clipFilterHeader) {
+		[clipFilterHeader setQueryDisplay:normalized];
+	}
+	if ([normalized length] > 0) {
+		CMFilterLog(@"[ClipMenu] pendingFilter='%@'", normalized);
+	}
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"CMFilterPendingDidChange"
+														object:nil
+													  userInfo:[NSDictionary dictionaryWithObject:normalized forKey:@"filter"]];
+	if (immediate) {
+		[self _cancelClipFilterDebounce];
+		[self _applyPendingClipFilter];
+		return;
+	}
+	[self _cancelClipFilterDebounce];
+	/* Menu tracking runs in NSEventTrackingRunLoopMode; default-mode timers never fire. */
+	[self performSelector:@selector(_applyPendingClipFilter)
+			   withObject:nil
+			   afterDelay:0.5
+				  inModes:[NSArray arrayWithObjects:NSRunLoopCommonModes, NSEventTrackingRunLoopMode, nil]];
+}
+
+- (void)_cancelClipFilterDebounce
+{
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+											 selector:@selector(_applyPendingClipFilter)
+											   object:nil];
+}
+
+- (void)_applyPendingClipFilter
+{
+	NSString *pending = pendingClipFilterString ? pendingClipFilterString : kEmptyString;
+	NSString *applied = clipFilterString ? clipFilterString : kEmptyString;
+	if ([pending isEqualToString:applied]) {
+		if (activeFilterMenu) {
+			[self _applyFilterVisibilityToMenu:activeFilterMenu];
+		}
+		return;
+	}
+	[clipFilterString release];
+	clipFilterString = [pending copy];
+	if (activeFilterMenu) {
+		[self _applyFilterVisibilityToMenu:activeFilterMenu];
+	}
+}
+
+- (void)_applyFilterVisibilityToMenu:(NSMenu *)menu
+{
+	if (!menu) {
+		return;
+	}
+	NSString *filter = clipFilterString ? clipFilterString : kEmptyString;
+	BOOL filtering = ([filter length] > 0);
+	
+	for (NSInteger i = 0; i < [menu numberOfItems]; i++) {
+		NSMenuItem *item = [menu itemAtIndex:i];
+		if ([item view] != nil || [sCMFilterResultItems containsObject:item]) {
+			continue;
+		}
+		if ([self _isHistoryFolderItem:item]) {
+			/* Matches are re-packed from the top; original folders stay hidden. */
+			[item setHidden:filtering];
+			continue;
+		}
+		if ([item hasSubmenu]) {
+			[self _applyFilterVisibilityToMenu:[item submenu]];
+			if (!filtering) {
+				[item setHidden:NO];
+				continue;
+			}
+			BOOL anyVisible = NO;
+			NSMenu *submenu = [item submenu];
+			for (NSInteger j = 0; j < [submenu numberOfItems]; j++) {
+				if (![[submenu itemAtIndex:j] isHidden]) {
+					anyVisible = YES;
+					break;
+				}
+			}
+			[item setHidden:!anyVisible];
+			continue;
+		}
+		if ([item action] == @selector(selectMenuItem:)) {
+			[item setHidden:filtering];
+			continue;
+		}
+		/* Snippets, separators and the Preferences / Quit footer stay visible while filtering. */
+		[item setHidden:NO];
+	}
+	/* Insert re-packed matches after hiding, so the relayout keeps originals hidden. */
+	if (menu == activeFilterMenu) {
+		[self _rebuildFilterResultsInMenu:menu filter:filter];
+		for (NSMenuItem *mi in [menu itemArray]) {
+			if ([self _isHistoryFolderItem:mi] || [self _isHistoryClipItem:mi]) {
+				[mi setHidden:(0 < [filter length])];
+			}
 		}
 	}
 }
+
+/* The line (or filename / URL) holding the match, starting a little before it. */
+- (NSString *)_excerptOfClip:(Clip *)clip forFilter:(NSString *)filter
+{
+	NSStringCompareOptions opts = NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSDiacriticInsensitiveSearch;
+	NSMutableArray *sources = [NSMutableArray array];
+	if ([[clip stringValue] length] > 0) {
+		[sources addObject:[clip stringValue]];
+	}
+	for (id f in [clip filenames]) {
+		if ([f isKindOfClass:[NSString class]]) {
+			[sources addObject:f];
+		}
+	}
+	for (id u in [clip URL]) {
+		[sources addObject:[u isKindOfClass:[NSURL class]] ? [(NSURL *)u absoluteString] : u];
+	}
+	for (id src in sources) {
+		if (![src isKindOfClass:[NSString class]]) {
+			continue;
+		}
+		NSRange r = [src rangeOfString:filter options:opts];
+		if (r.location == NSNotFound) {
+			continue;
+		}
+		NSUInteger lineStart = 0, lineEnd = 0, contentsEnd = 0;
+		[src getLineStart:&lineStart end:&lineEnd contentsEnd:&contentsEnd forRange:r];
+		NSString *line = [src substringWithRange:NSMakeRange(lineStart, contentsEnd - lineStart)];
+		NSUInteger offset = r.location - lineStart;
+		if (offset > 15) {
+			line = [@"…" stringByAppendingString:[line substringFromIndex:offset - 15]];
+		}
+		return trimTitle(line);
+	}
+	return nil;
+}
+
+/* Marks every occurrence of the filter string in the item title with a yellow marker. */
+- (void)_highlightFilter:(NSString *)filter inMenuItem:(NSMenuItem *)item
+{
+	NSAttributedString *base = [item attributedTitle];
+	if (!base) {
+		base = [[[NSAttributedString alloc] initWithString:[item title]] autorelease];
+	}
+	NSMutableAttributedString *marked = [[base mutableCopy] autorelease];
+	NSString *plain = [marked string];
+	NSStringCompareOptions opts = NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSDiacriticInsensitiveSearch;
+	NSRange search = NSMakeRange(0, [plain length]);
+	BOOL found = NO;
+	while (search.length > 0) {
+		NSRange r = [plain rangeOfString:filter options:opts range:search];
+		if (r.location == NSNotFound) {
+			break;
+		}
+		[marked addAttribute:NSBackgroundColorAttributeName value:[NSColor yellowColor] range:r];
+		[marked addAttribute:NSForegroundColorAttributeName value:[NSColor blackColor] range:r];
+		found = YES;
+		NSUInteger next = NSMaxRange(r);
+		search = NSMakeRange(next, [plain length] - next);
+	}
+	if (found) {
+		[item setAttributedTitle:marked];
+	}
+}
+
+- (BOOL)_isHistoryClipItem:(NSMenuItem *)item
+{
+	return [item action] == @selector(selectMenuItem:) && ![sCMFilterResultItems containsObject:item];
+}
+
+- (BOOL)_isHistoryFolderItem:(NSMenuItem *)item
+{
+	if (![item hasSubmenu] || [sCMFilterResultItems containsObject:item]) {
+		return NO;
+	}
+	for (NSMenuItem *sub in [[item submenu] itemArray]) {
+		if ([sub action] == @selector(selectMenuItem:)) {
+			return YES;
+		}
+	}
+	return NO;
+}
+
+- (void)_rebuildFilterResultsInMenu:(NSMenu *)menu filter:(NSString *)filter
+{
+	if (!sCMFilterResultItems) {
+		sCMFilterResultItems = [[NSMutableArray alloc] init];
+	}
+	for (NSMenuItem *old in sCMFilterResultItems) {
+		if ([old menu] == menu) {
+			[menu removeItem:old];
+		}
+	}
+	[sCMFilterResultItems removeAllObjects];
+	if ([filter length] == 0) {
+		return;
+	}
+	
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	NSUInteger inlineCount = [defaults integerForKey:CMPrefNumberOfItemsPlaceInlineKey];
+	NSUInteger folderSize = [defaults integerForKey:CMPrefNumberOfItemsPlaceInsideFolderKey];
+	NSUInteger maxHistory = [defaults integerForKey:CMPrefMaxHistorySizeKey];
+	NSArray *clips = [[ClipsController sharedInstance] sortedClips];
+	NSUInteger total = [clips count];
+	if (maxHistory < total) {
+		total = maxHistory;
+	}
+	
+	NSMutableArray *matches = [NSMutableArray array];
+	for (NSUInteger i = 0; i < total; i++) {
+		if ([self _clip:[clips objectAtIndex:i] matchesFilter:filter]) {
+			[matches addObject:[NSNumber numberWithUnsignedInteger:i]];
+		}
+	}
+	
+	/* Insert where the original history items start. */
+	NSInteger at = [menu numberOfItems];
+	for (NSInteger i = 0; i < [menu numberOfItems]; i++) {
+		NSMenuItem *mi = [menu itemAtIndex:i];
+		if ([self _isHistoryClipItem:mi] || [self _isHistoryFolderItem:mi]) {
+			at = i;
+			break;
+		}
+	}
+	
+	NSUInteger firstIndex = firstIndexOfMenuItems();
+	NSUInteger matchCount = [matches count];
+	NSMenu *submenu = nil;
+	NSUInteger listNumber = firstIndex;
+	for (NSUInteger k = 0; k < matchCount; k++) {
+		NSUInteger clipIndex = [[matches objectAtIndex:k] unsignedIntegerValue];
+		BOOL inFolder = (inlineCount < 1 || inlineCount <= k) && 0 < folderSize;
+		if (inFolder && (k == inlineCount || (k - inlineCount) % folderSize == 0 || (inlineCount < 1 && k % folderSize == 0))) {
+			NSMenuItem *folderItem = [self _makeSubmenuItemWithCount:k
+															   start:firstIndex
+																 end:matchCount
+													   numberOfItems:folderSize];
+			submenu = [folderItem submenu];
+			if (0 < sCMHistorySubmenuWidth) {
+				[submenu setMinimumWidth:sCMHistorySubmenuWidth];
+			}
+			[menu insertItem:folderItem atIndex:at++];
+			[sCMFilterResultItems addObject:folderItem];
+			listNumber = firstIndex;
+		}
+		NSMenuItem *menuItem = [self _makeMenuItemForClip:[clips objectAtIndex:clipIndex]
+												withCount:clipIndex
+											andListNumber:listNumber];
+		[menuItem setTag:clipIndex];
+		NSStringCompareOptions topts = NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSDiacriticInsensitiveSearch;
+		if ([[menuItem title] rangeOfString:filter options:topts].location == NSNotFound) {
+			/* Match lies on a later line / in the shortened part: show it in context. */
+			NSString *excerpt = [self _excerptOfClip:[clips objectAtIndex:clipIndex] forFilter:filter];
+			if (excerpt) {
+				NSString *shown = [self _typeaheadMutedTitle:excerpt];
+				[menuItem setTitle:shown];
+				[menuItem setAttributedTitle:makeAttributedTitle(shown)];
+			}
+		}
+		[self _highlightFilter:filter inMenuItem:menuItem];
+		if (inFolder) {
+			[submenu addItem:menuItem];
+			listNumber = incrementListNumber(listNumber, folderSize, firstIndex);
+		} else {
+			[menu insertItem:menuItem atIndex:at++];
+			[sCMFilterResultItems addObject:menuItem];
+			listNumber = incrementListNumber(listNumber, inlineCount, firstIndex);
+		}
+	}
+}
+
+- (void)_installCarbonFilterHandler
+{
+	if (sCMFilterCarbonHandler) {
+		return;
+	}
+	EventTypeSpec specs[2];
+	specs[0].eventClass = kEventClassKeyboard;
+	specs[0].eventKind = kEventRawKeyDown;
+	specs[1].eventClass = kEventClassKeyboard;
+	specs[1].eventKind = kEventRawKeyRepeat;
+	OSStatus err = InstallEventHandler(GetEventDispatcherTarget(),
+									   CMFilterCarbonEventHandler,
+									   2,
+									   specs,
+									   (void *)self,
+									   &sCMFilterCarbonHandler);
+	if (err != noErr) {
+		sCMFilterCarbonHandler = NULL;
+		CMFilterLog(@"[ClipMenu] Carbon filter handler failed: %d", (int)err);
+	} else {
+		CMFilterLog(@"[ClipMenu] Carbon filter handler installed");
+	}
+}
+
+- (void)_removeCarbonFilterHandler
+{
+	if (sCMFilterCarbonHandler) {
+		RemoveEventHandler(sCMFilterCarbonHandler);
+		sCMFilterCarbonHandler = NULL;
+	}
+}
+
+- (void)_startClipFilterMonitor
+{
+	[self _stopClipFilterMonitor];
+	
+	/* Re-arm header tap (status-item menus sometimes skip viewDidMoveToWindow timing). */
+	if (clipFilterHeader) {
+		[clipFilterHeader ensureKeyIntercept];
+	}
+	
+	/* Local monitor (works for some NSPopupMenuWindow paths). */
+	clipFilterEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+																	handler:^NSEvent *(NSEvent *event) {
+		NSEvent *passed = [self _handleClipFilterKeyEvent:event];
+		return passed;
+	}];
+	
+	/* Carbon — classic menu-tracking path. */
+	[self _installCarbonFilterHandler];
+	
+	/* CGEventTap needs Accessibility. Prompt once per launch if missing —
+	 * re-signing / fresh installs often drop the TCC grant. */
+	if (!AXIsProcessTrusted() && !sCMFilterDidPromptAX) {
+		sCMFilterDidPromptAX = YES;
+		NSDictionary *opts = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:YES]
+															forKey:(id)kAXTrustedCheckOptionPrompt];
+		AXIsProcessTrustedWithOptions((CFDictionaryRef)opts);
+		CMFilterLog(@"[ClipMenu] prompted for Accessibility (was untrusted)");
+	}
+
+	/* macOS 10.15+: keyboard CGEventTap also needs Input Monitoring. */
+	if (&CGPreflightListenEventAccess != NULL && !sCMFilterDidRequestListen && !CGPreflightListenEventAccess()) {
+		sCMFilterDidRequestListen = YES;
+		CMFilterLog(@"[ClipMenu] requesting Input Monitoring (ListenEvent)");
+		CGRequestListenEventAccess();
+	}
+
+	/* CGEventTap — required when AppKit swallows keys into type-ahead. */
+	if (!sCMFilterEventTap) {
+		CGEventMask mask = CGEventMaskBit(kCGEventKeyDown);
+		sCMFilterEventTap = CGEventTapCreate(kCGSessionEventTap,
+											 kCGHeadInsertEventTap,
+											 kCGEventTapOptionDefault,
+											 mask,
+											 CMFilterMenuCGEventTapCallback,
+											 (void *)self);
+		if (!sCMFilterEventTap) {
+			sCMFilterEventTap = CGEventTapCreate(kCGHIDEventTap,
+												 kCGHeadInsertEventTap,
+												 kCGEventTapOptionDefault,
+												 mask,
+												 CMFilterMenuCGEventTapCallback,
+												 (void *)self);
+		}
+		if (sCMFilterEventTap) {
+			sCMFilterTapSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, sCMFilterEventTap, 0);
+			CFRunLoopRef rl = CFRunLoopGetCurrent();
+			CFRunLoopAddSource(rl, sCMFilterTapSource, kCFRunLoopCommonModes);
+			CFRunLoopAddSource(rl, sCMFilterTapSource, (CFStringRef)NSEventTrackingRunLoopMode);
+			CGEventTapEnable(sCMFilterEventTap, true);
+			CMFilterLog(@"[ClipMenu] MenuController CGEventTap installed (trusted=%d)", (int)AXIsProcessTrusted());
+		} else {
+			CMFilterLog(@"[ClipMenu] MenuController CGEventTapCreate failed (trusted=%d)", (int)AXIsProcessTrusted());
+		}
+	} else {
+		CGEventTapEnable(sCMFilterEventTap, true);
+	}
+}
+
+- (void)_stopClipFilterMonitor
+{
+	[self _cancelClipFilterDebounce];
+	if (clipFilterEventMonitor) {
+		[NSEvent removeMonitor:clipFilterEventMonitor];
+		clipFilterEventMonitor = nil;
+	}
+	[self _removeCarbonFilterHandler];
+	if (sCMFilterEventTap) {
+		CGEventTapEnable(sCMFilterEventTap, false);
+		if (sCMFilterTapSource) {
+			CFRunLoopRef rl = CFRunLoopGetCurrent();
+			CFRunLoopRemoveSource(rl, sCMFilterTapSource, kCFRunLoopCommonModes);
+			CFRunLoopRemoveSource(rl, sCMFilterTapSource, (CFStringRef)NSEventTrackingRunLoopMode);
+			CFRelease(sCMFilterTapSource);
+			sCMFilterTapSource = NULL;
+		}
+		CFRelease(sCMFilterEventTap);
+		sCMFilterEventTap = NULL;
+	}
+}
+
+- (OSStatus)_carbonHandleFilterEvent:(EventRef)event
+{
+	if (!activeFilterMenu) {
+		return eventNotHandledErr;
+	}
+	
+	UInt32 keyCode = 0;
+	GetEventParameter(event, kEventParamKeyCode, typeUInt32, NULL, sizeof(keyCode), NULL, &keyCode);
+	
+	UInt32 modifiers = 0;
+	GetEventParameter(event, kEventParamKeyModifiers, typeUInt32, NULL, sizeof(modifiers), NULL, &modifiers);
+	if (modifiers & (cmdKey | controlKey | optionKey | rightControlKey | rightOptionKey)) {
+		return eventNotHandledErr;
+	}
+	
+	NSString *current = pendingClipFilterString ? pendingClipFilterString
+		: (clipFilterString ? clipFilterString : kEmptyString);
+	
+	/* Escape */
+	if (keyCode == 53) {
+		if ([current length] > 0 || [clipFilterString length] > 0) {
+			[self _updatePendingClipFilter:kEmptyString applyImmediately:YES];
+			return noErr;
+		}
+		return eventNotHandledErr;
+	}
+	/* Return / Enter — apply now, let menu keep Enter for item selection only when empty filter? consume always apply */
+	if (keyCode == 36 || keyCode == 76) {
+		[self _updatePendingClipFilter:current applyImmediately:YES];
+		return noErr;
+	}
+	/* Delete / Forward delete */
+	if (keyCode == 51 || keyCode == 117) {
+		if ([current length] > 0) {
+			[self _updatePendingClipFilter:[current substringToIndex:[current length] - 1] applyImmediately:NO];
+			return noErr;
+		}
+		return eventNotHandledErr;
+	}
+	/* Arrows — menu navigation */
+	if (keyCode == 123 || keyCode == 124 || keyCode == 125 || keyCode == 126) {
+		return eventNotHandledErr;
+	}
+	
+	NSString *digit = nil;
+	switch (keyCode) {
+		case 29: digit = @"0"; break;
+		case 18: digit = @"1"; break;
+		case 19: digit = @"2"; break;
+		case 20: digit = @"3"; break;
+		case 21: digit = @"4"; break;
+		case 23: digit = @"5"; break;
+		case 22: digit = @"6"; break;
+		case 26: digit = @"7"; break;
+		case 28: digit = @"8"; break;
+		case 25: digit = @"9"; break;
+		default: break;
+	}
+	if (digit) {
+		[self _updatePendingClipFilter:[current stringByAppendingString:digit] applyImmediately:NO];
+		return noErr;
+	}
+	
+	UniChar buffer[8];
+	ByteCount actual = 0;
+	OSStatus perr = GetEventParameter(event, kEventParamKeyUnicodes, typeUnicodeText, NULL,
+									  sizeof(buffer), &actual, buffer);
+	if (perr != noErr || actual == 0) {
+		return eventNotHandledErr;
+	}
+	NSUInteger length = actual / sizeof(UniChar);
+	NSString *append = [NSString stringWithCharacters:buffer length:length];
+	if ([append length] == 0) {
+		return eventNotHandledErr;
+	}
+	unichar c = [append characterAtIndex:0];
+	if (c < 32) {
+		return eventNotHandledErr;
+	}
+	
+	[self _updatePendingClipFilter:[current stringByAppendingString:append] applyImmediately:NO];
+	return noErr; /* consume — blocks NSMenu type-ahead / folder jumping */
+}
+
+- (BOOL)_menuIsUnderActiveFilter:(NSMenu *)menu
+{
+	if (!activeFilterMenu || !menu) {
+		return NO;
+	}
+	for (NSMenu *m = menu; m != nil; m = [m supermenu]) {
+		if (m == activeFilterMenu) {
+			return YES;
+		}
+	}
+	return NO;
+}
+
+- (IBAction)_clipFilterIgnore:(id)sender
+{
+	(void)sender;
+}
+
+- (NSEvent *)_handleClipFilterKeyEvent:(NSEvent *)event
+{
+	if (!activeFilterMenu) {
+		return event;
+	}
+	NSUInteger mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+	if (mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) {
+		return event;
+	}
+	NSString *raw = [event characters];
+	NSString *chars = [event charactersIgnoringModifiers];
+	NSString *current = pendingClipFilterString ? pendingClipFilterString
+		: (clipFilterString ? clipFilterString : kEmptyString);
+	unsigned short kc = [event keyCode];
+	
+	/* Digits by keyCode — reliable even when characters are empty / IME oddities. */
+	NSString *digit = nil;
+	switch (kc) {
+		case 29: digit = @"0"; break;
+		case 18: digit = @"1"; break;
+		case 19: digit = @"2"; break;
+		case 20: digit = @"3"; break;
+		case 21: digit = @"4"; break;
+		case 23: digit = @"5"; break;
+		case 22: digit = @"6"; break;
+		case 26: digit = @"7"; break;
+		case 28: digit = @"8"; break;
+		case 25: digit = @"9"; break;
+		default: break;
+	}
+	if (digit) {
+		CMFilterLog(@"[ClipMenu] handleKey digit='%@' (was='%@')", digit, current);
+		[self _updatePendingClipFilter:[current stringByAppendingString:digit] applyImmediately:NO];
+		return nil;
+	}
+	
+	if ([chars length] == 0) {
+		return event;
+	}
+	unichar c = [chars characterAtIndex:0];
+	
+	if (c == 27) {
+		if ([current length] > 0 || [clipFilterString length] > 0) {
+			[self _updatePendingClipFilter:kEmptyString applyImmediately:YES];
+			return nil;
+		}
+		return event;
+	}
+	if (c == NSDeleteCharacter || c == NSBackspaceCharacter || c == 127 || kc == 51) {
+		if ([current length] > 0) {
+			[self _updatePendingClipFilter:[current substringToIndex:[current length] - 1] applyImmediately:NO];
+			return nil;
+		}
+		return event;
+	}
+	if (c == NSCarriageReturnCharacter || c == NSEnterCharacter || c == '\r' || c == '\n' ||
+		kc == 36 || kc == 76) {
+		[self _updatePendingClipFilter:current applyImmediately:YES];
+		return nil;
+	}
+	/* Arrows / function keys — leave to menu navigation. */
+	if (kc == 123 || kc == 124 || kc == 125 || kc == 126 ||
+		c < 32 || c == NSUpArrowFunctionKey || c == NSDownArrowFunctionKey ||
+		c == NSLeftArrowFunctionKey || c == NSRightArrowFunctionKey) {
+		return event;
+	}
+	
+	NSString *append = (raw && [raw length] > 0) ? raw : chars;
+	CMFilterLog(@"[ClipMenu] handleKey append='%@' (was='%@')", append, current);
+	[self _updatePendingClipFilter:[current stringByAppendingString:append] applyImmediately:NO];
+	return nil;
+}
+
+- (BOOL)menuHasKeyEquivalent:(NSMenu *)menu forEvent:(NSEvent *)event target:(id *)target action:(SEL *)action
+{
+	if (![self _menuIsUnderActiveFilter:menu]) {
+		return NO;
+	}
+	if ([event type] != NSEventTypeKeyDown) {
+		return NO;
+	}
+	NSEvent *passed = [self _handleClipFilterKeyEvent:event];
+	if (passed == nil) {
+		/* Claim the key so AppKit will not run menu type-ahead / equivalents. */
+		if (target) {
+			*target = self;
+		}
+		if (action) {
+			*action = @selector(_clipFilterIgnore:);
+		}
+		return YES;
+	}
+	return NO;
+}
+
+
+#pragma mark - CMFilterHeaderViewDelegate -
+
+- (NSString *)filterHeaderCurrentString:(CMFilterHeaderView *)header
+{
+	(void)header;
+	return pendingClipFilterString ? pendingClipFilterString
+		: (clipFilterString ? clipFilterString : kEmptyString);
+}
+
+- (void)filterHeader:(CMFilterHeaderView *)header appendString:(NSString *)string
+{
+	(void)header;
+	NSString *current = [self filterHeaderCurrentString:header];
+	/* Text goes to the field now; 0.5s quiet = same as Enter (auto apply). */
+	[self _updatePendingClipFilter:[current stringByAppendingString:string] applyImmediately:NO];
+}
+
+- (void)filterHeader:(CMFilterHeaderView *)header replaceString:(NSString *)string
+{
+	(void)header;
+	[self _updatePendingClipFilter:(string ?: @"") applyImmediately:NO];
+}
+
+- (void)filterHeaderDeleteBackward:(CMFilterHeaderView *)header
+{
+	(void)header;
+	NSString *current = [self filterHeaderCurrentString:header];
+	if ([current length] == 0) {
+		return;
+	}
+	[self _updatePendingClipFilter:[current substringToIndex:[current length] - 1] applyImmediately:NO];
+}
+
+- (void)filterHeaderClear:(CMFilterHeaderView *)header
+{
+	(void)header;
+	[self _updatePendingClipFilter:kEmptyString applyImmediately:YES];
+}
+
+- (void)filterHeaderApply:(CMFilterHeaderView *)header
+{
+	(void)header;
+	NSString *current = [self filterHeaderCurrentString:header];
+	[self _updatePendingClipFilter:current applyImmediately:YES];
+}
+
 
 - (void)_addSnippetsToMenu:(NSMenu *)aMenu atPosition:(CMPositionOfSnippets)positionOfSnippets
 {	
@@ -757,24 +1670,20 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (NSMenuItem *)_makeMenuItemForClip:(Clip *)clip withCount:(NSUInteger)count andListNumber:(NSUInteger)listNumber
 {	
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-	BOOL isMarkWithNumber = [defaults boolForKey:CMPrefMenuItemsAreMarkedWithNumbersKey];
+	/* Leading list numbers collide with incremental search type-ahead; never show them. */
+	BOOL isMarkWithNumber = NO;
 	BOOL isShowToolTip = [defaults boolForKey:CMPrefShowToolTipOnMenuItemKey];
 	BOOL isShowIcon = [defaults boolForKey:CMPrefShowIconInTheMenuKey];
 	BOOL isShowImage = [defaults boolForKey:CMPrefShowImageInTheMenuKey];
 	BOOL addNumericKeyEquivalents = [defaults boolForKey:CMPrefAddNumericKeyEquivalentsKey];
 	
 	NSString *keyEquivalent = kEmptyString;
-	
-	if (addNumericKeyEquivalents && (count <= kMaxKeyEquivalents)) {
-		BOOL isStartFromZero = [defaults boolForKey:CMPrefMenuItemsTitleStartWithZeroKey];
-		
-		NSUInteger shortCutNumber = (isStartFromZero) ? count : count + 1;
-		if (shortCutNumber == kMaxKeyEquivalents) {
-			shortCutNumber = 0;
-		}
-		
-		keyEquivalent = [NSString stringWithFormat:@"%d", shortCutNumber];
-	}
+	/*
+	 * Numeric key equivalents are disabled: they collide with incremental search
+	 * and make "1 - 30" folders jump when digits are typed.
+	 */
+	(void)addNumericKeyEquivalents;
+	(void)count;
 	
 	NSArray *pbTypes = [clip types];
 	NSString *primaryPboardType = [clip primaryPboardType];
@@ -792,9 +1701,10 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	NSString *titleWithMark = [self _menuItemTitleWithString:title
 												  listNumber:listNumber 
 													 boolean:isMarkWithNumber];
+	NSString *mutedTitle = [self _typeaheadMutedTitle:titleWithMark];
 	
 	NSMenuItem *menuItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]]
-							 initWithTitle:titleWithMark
+							 initWithTitle:mutedTitle
 							 action:@selector( selectMenuItem: )
 							 keyEquivalent:keyEquivalent] autorelease];
 	[menuItem setTag:count];
@@ -809,27 +1719,27 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	}
 	
 	/* Change Menu Font Size */
-	NSAttributedString *attrString = makeAttributedTitle(titleWithMark);
+	NSAttributedString *attrString = makeAttributedTitle(mutedTitle);
 	if (attrString) {
 		[menuItem setAttributedTitle:attrString];
 	}
 	
 	if ([primaryPboardType isEqualToString:NSTIFFPboardType]
 		|| [primaryPboardType isEqualToString:NSPICTPboardType]) {
-		[menuItem setTitle:[self _menuItemTitleWithString:@"(Image)" 
+		[menuItem setTitle:[self _typeaheadMutedTitle:[self _menuItemTitleWithString:@"(Image)"
 											   listNumber:listNumber
-												  boolean:isMarkWithNumber]];
+												  boolean:isMarkWithNumber]]];
 	}
 	else if ([primaryPboardType isEqualToString:NSPDFPboardType]) {
-		[menuItem setTitle:[self _menuItemTitleWithString:@"(PDF)"
-											   listNumber:listNumber 
-												  boolean:isMarkWithNumber]];
+		[menuItem setTitle:[self _typeaheadMutedTitle:[self _menuItemTitleWithString:@"(PDF)"
+											   listNumber:listNumber
+												  boolean:isMarkWithNumber]]];
 	}
 	else if ([primaryPboardType isEqualToString:NSFilenamesPboardType]
 			 && [title isEqualToString:kEmptyString]) {
-		[menuItem setTitle:[self _menuItemTitleWithString:@"(Filenames)" 
+		[menuItem setTitle:[self _typeaheadMutedTitle:[self _menuItemTitleWithString:@"(Filenames)"
 											   listNumber:listNumber
-												  boolean:isMarkWithNumber]];
+												  boolean:isMarkWithNumber]]];
 	}
 	
 	/* image */
@@ -858,7 +1768,8 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (NSMenuItem *)_makeMenuItemForSnippet:(NSManagedObject *)snippet withListNumber:(NSUInteger)listNumber
 {
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-	BOOL isMarkWithNumber = [defaults boolForKey:CMPrefMenuItemsAreMarkedWithNumbersKey];
+	/* Leading list numbers collide with incremental search type-ahead; never show them. */
+	BOOL isMarkWithNumber = NO;
 	BOOL isShowIcon = [defaults boolForKey:CMPrefShowIconInTheMenuKey];
 	//	BOOL addNumericKeyEquivalents = [defaults boolForKey:CMPrefAddNumericKeyEquivalentsKey];
 	
@@ -886,8 +1797,9 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 												  listNumber:listNumber 
 													 boolean:isMarkWithNumber];
 	
-	NSMenuItem *menuItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]] 
-							 initWithTitle:titleWithMark
+	NSString *mutedTitle = [self _typeaheadMutedTitle:titleWithMark];
+	NSMenuItem *menuItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]]
+							 initWithTitle:mutedTitle
 							 action:@selector( selectSnippetMenuItem: )
 							 keyEquivalent:keyEquivalent] autorelease];
 	[menuItem setRepresentedObject:snippet];
@@ -895,7 +1807,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	[menuItem setToolTip:[snippet valueForKey:kContent]];
 	
 	/* Change Menu Font Size */
-	NSAttributedString *attrString = makeAttributedTitle(titleWithMark);
+	NSAttributedString *attrString = makeAttributedTitle(mutedTitle);
 	if (attrString) {
 		[menuItem setAttributedTitle:attrString];
 	}
@@ -922,7 +1834,8 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 		lastNumber = end;
 	}
 	
-	NSString *menuItemTitle = [NSString stringWithFormat:@"%d - %d",
+	/* Leading bullet avoids digit type-ahead jumping between range folders. */
+	NSString *menuItemTitle = [NSString stringWithFormat:@"• %d – %d",
 							   count + 1,
 							   lastNumber];
 	return [self _makeSubmenuItemWithTitle:menuItemTitle];
@@ -933,14 +1846,17 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	//	NSLog(@"_makeSubmenu");
 	
 	NSMenu *submenu = [[NSMenu allocWithZone:[NSMenu menuZone]] init];
+	if ([submenu respondsToSelector:@selector(setAllowsTypeSelect:)]) {
+		[submenu setAllowsTypeSelect:NO];
+	}
 	NSMenuItem *submenuItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]] 
-								initWithTitle:title
+								initWithTitle:[self _typeaheadMutedTitle:title]
 								action:NULL
 								keyEquivalent:kEmptyString] autorelease];
 	[submenuItem setSubmenu:submenu];
 	[submenu release], submenu = nil;
 	
-	NSAttributedString *attrString = makeAttributedTitle(title);
+	NSAttributedString *attrString = makeAttributedTitle([self _typeaheadMutedTitle:title]);
 	if (attrString) {
 		[submenuItem setAttributedTitle:attrString];
 	}
@@ -957,12 +1873,22 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 
 - (NSMenuItem *)_makeMenuItemWithTitle:(NSString *)itemName action:(SEL)anAction
 {
+	NSString *muted = [self _typeaheadMutedTitle:itemName];
 	NSMenuItem *menuItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]]
-							 initWithTitle:itemName
+							 initWithTitle:muted
 							 action:anAction
 							 keyEquivalent:kEmptyString] autorelease];
+	/* Status-item menus have no responder chain to AppController; set targets. */
+	if (anAction == @selector(terminate:)) {
+		[menuItem setTarget:NSApp];
+	} else if (anAction != NULL) {
+		id delegate = [NSApp delegate];
+		if (delegate && [delegate respondsToSelector:anAction]) {
+			[menuItem setTarget:delegate];
+		}
+	}
 	
-	NSAttributedString *attrString = makeAttributedTitle(itemName);
+	NSAttributedString *attrString = makeAttributedTitle(muted);
 	if (attrString) {
 		[menuItem setAttributedTitle:attrString];
 	}
@@ -1070,6 +1996,9 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	NSMenu *newMenu = [[[NSMenu allocWithZone:[NSMenu menuZone]]
 						initWithTitle:kHistoryMenuIdentifier] autorelease];
 	[newMenu setDelegate:self];
+	if ([newMenu respondsToSelector:@selector(setAllowsTypeSelect:)]) {
+		[newMenu setAllowsTypeSelect:NO];
+	}
 	[self _addClipsToMenu:newMenu];
 	
 	return newMenu;
@@ -1328,7 +2257,12 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	}
 	
 	if (clipMenu) {
-		[statusItem setMenu:clipMenu];
+		[statusItem setMenu:nil];
+		if ([statusItem respondsToSelector:@selector(button)] && statusItem.button) {
+			statusItem.button.target = self;
+			statusItem.button.action = @selector(statusBarButtonClicked:);
+			[statusItem.button sendActionOn:NSEventMaskLeftMouseDown];
+		}
 	}
 }
 
@@ -1343,7 +2277,12 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)_refreshStatusItem
 {
 	if (statusItem) {
-		[statusItem setMenu:clipMenu];
+		[statusItem setMenu:nil];
+		if ([statusItem respondsToSelector:@selector(button)] && statusItem.button) {
+			statusItem.button.target = self;
+			statusItem.button.action = @selector(statusBarButtonClicked:);
+			[statusItem.button sendActionOn:NSEventMaskLeftMouseDown];
+		}
 	}
 }
 
@@ -1527,6 +2466,170 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 {	
 	[self updateStatusMenu];
 }
+
+#pragma mark - E2E filter harness -
+
++ (int)runFilterE2ETest
+{
+	[NSApplication sharedApplication];
+	MenuController *mc = [MenuController sharedInstance];
+	
+	__block NSString *seenFilter = [[NSMutableString string] retain];
+	__block NSString *windowClass = [[NSMutableString string] retain];
+	__block NSString *interceptKind = [[NSMutableString string] retain];
+	__block BOOL matchVisibleAtApply = NO;
+	__block BOOL otherHiddenAtApply = NO;
+	__block NSMenu *menuRef = nil;
+	__block NSMenuItem *clipDigitRef = nil;
+	__block NSMenuItem *clipOtherRef = nil;
+	__block BOOL postedKeys = NO;
+	
+	NSMenu *menu = [[[NSMenu alloc] initWithTitle:kHistoryMenuIdentifier] autorelease];
+	[menu setDelegate:mc];
+	menuRef = menu;
+	
+	CMFilterHeaderView *header = [[[CMFilterHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 240, 24)] autorelease];
+	header.delegate = mc;
+	NSMenuItem *headerItem = [[[NSMenuItem alloc] init] autorelease];
+	[headerItem setView:header];
+	[menu addItem:headerItem];
+	
+	NSMenuItem *folderA = [[[NSMenuItem alloc] initWithTitle:@"• 1 – 30" action:NULL keyEquivalent:@""] autorelease];
+	NSMenu *subA = [[[NSMenu alloc] init] autorelease];
+	[folderA setSubmenu:subA];
+	NSMenuItem *folderB = [[[NSMenuItem alloc] initWithTitle:@"• 31 – 60" action:NULL keyEquivalent:@""] autorelease];
+	[folderB setSubmenu:[[[NSMenu alloc] init] autorelease]];
+	[menu addItem:folderA];
+	[menu addItem:folderB];
+	
+	NSMenuItem *clipDigit = [[[NSMenuItem alloc] initWithTitle:@"zzz-match-333" action:@selector(selectMenuItem:) keyEquivalent:@""] autorelease];
+	[clipDigit setTag:0];
+	[subA addItem:clipDigit];
+	clipDigitRef = clipDigit;
+	NSMenuItem *clipOther = [[[NSMenuItem alloc] initWithTitle:@"other-plain" action:@selector(selectMenuItem:) keyEquivalent:@""] autorelease];
+	[clipOther setTag:1];
+	[subA addItem:clipOther];
+	clipOtherRef = clipOther;
+	
+	id obs1 = [[NSNotificationCenter defaultCenter]
+			   addObserverForName:@"CMFilterPendingDidChange" object:nil queue:nil
+			   usingBlock:^(NSNotification *note) {
+		NSString *f = [[note userInfo] objectForKey:@"filter"];
+		if ([f length] > 0) {
+			[(NSMutableString *)seenFilter setString:f];
+		}
+	}];
+	id obs2 = [[NSNotificationCenter defaultCenter]
+			   addObserverForName:@"CMFilterHandlerInstalled" object:nil queue:nil
+			   usingBlock:^(NSNotification *note) {
+		NSString *wc = [[note userInfo] objectForKey:@"windowClass"];
+		NSString *ik = [[note userInfo] objectForKey:@"intercept"];
+		if (wc) [(NSMutableString *)windowClass setString:wc];
+		if (ik) [(NSMutableString *)interceptKind setString:ik];
+		
+		/* Real event path: CGEventPost must be seen by CGEventTap during tracking. */
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[mc filterHeaderClear:header];
+			[(NSMutableString *)seenFilter setString:@""];
+		});
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+			usleep(250000);
+			CGKeyCode codes[2] = { 20, 20 }; /* '3' '3' */
+			for (int i = 0; i < 2; i++) {
+				CGEventRef down = CGEventCreateKeyboardEvent(NULL, codes[i], true);
+				CGEventRef up = CGEventCreateKeyboardEvent(NULL, codes[i], false);
+				if (down && up) {
+					CGEventSetFlags(down, 0);
+					CGEventSetFlags(up, 0);
+					CGEventPost(kCGSessionEventTap, down);
+					CGEventPost(kCGSessionEventTap, up);
+					postedKeys = YES;
+				}
+				if (down) CFRelease(down);
+				if (up) CFRelease(up);
+				usleep(80000);
+			}
+			usleep(150000);
+			dispatch_async(dispatch_get_main_queue(), ^{
+				NSString *cur = [mc filterHeaderCurrentString:header];
+				if ([cur length] > 0) {
+					[(NSMutableString *)seenFilter setString:cur];
+				}
+				[mc filterHeaderApply:header];
+				otherHiddenAtApply = [folderA isHidden]; /* original folders are replaced by re-packed matches */
+				matchVisibleAtApply = ![clipDigitRef isHidden];
+				NSLog(@"[E2E] after CGEventPost pending='%@' posted=%d", cur, (int)postedKeys);
+				[menuRef cancelTracking];
+			});
+		});
+	}];
+	
+	NSWindow *host = [[[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 40, 40)
+												  styleMask:NSWindowStyleMaskTitled
+													backing:NSBackingStoreBuffered
+													  defer:NO] autorelease];
+	[host setIsVisible:YES];
+	
+	NSPoint pt = NSMakePoint(10, 10);
+	NSEvent *evt = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown
+									  location:pt
+								 modifierFlags:0
+									 timestamp:[[NSProcessInfo processInfo] systemUptime]
+								  windowNumber:[host windowNumber]
+									   context:nil
+								   eventNumber:1
+									clickCount:1
+									  pressure:1];
+	[NSMenu popUpContextMenu:menu withEvent:evt forView:[host contentView]];
+	
+	[[NSNotificationCenter defaultCenter] removeObserver:obs1];
+	[[NSNotificationCenter defaultCenter] removeObserver:obs2];
+	[host orderOut:nil];
+	
+	int failures = 0;
+	if ([windowClass length] == 0) {
+		NSLog(@"[E2E] FAIL intercept not installed");
+		failures++;
+	} else {
+		NSLog(@"[E2E] OK intercept on %@ (%@)", windowClass, interceptKind);
+	}
+	if (!postedKeys) {
+		NSLog(@"[E2E] FAIL CGEventPost did not run");
+		failures++;
+	} else {
+		NSLog(@"[E2E] OK CGEventPost ran");
+	}
+	if (!([seenFilter hasPrefix:@"33"])) {
+		NSLog(@"[E2E] FAIL filter pending expected prefix '33' got '%@'", seenFilter);
+		failures++;
+	} else {
+		NSLog(@"[E2E] OK filter pending starts with 33 via CGEventTap ('%@')", seenFilter);
+	}
+	if (!otherHiddenAtApply) {
+		NSLog(@"[E2E] FAIL non-matching clip should be hidden at apply");
+		failures++;
+	} else {
+		NSLog(@"[E2E] OK non-matching clip hidden");
+	}
+	if (!matchVisibleAtApply) {
+		NSLog(@"[E2E] FAIL matching clip should stay visible at apply");
+		failures++;
+	} else {
+		NSLog(@"[E2E] OK matching clip visible");
+	}
+	
+	[seenFilter release];
+	[windowClass release];
+	[interceptKind release];
+	
+	if (failures) {
+		NSLog(@"[E2E] FAILED (%d)", failures);
+		return 1;
+	}
+	NSLog(@"[E2E] PASSED");
+	return 0;
+}
+
 
 @end
 

@@ -7,10 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C1A55E110001000000030000 /* SnippetPrefsController.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E110001000000020000 /* SnippetPrefsController.m */; };
+		C1A55E110001000000040000 /* SnippetPrefsController.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E110001000000020000 /* SnippetPrefsController.m */; };
+		C1A55E1100010000000F3000 /* NSObject+CMHasFolders.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E1100010000000F2000 /* NSObject+CMHasFolders.m */; };
+		C1A55E1100010000000F4000 /* NSObject+CMHasFolders.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E1100010000000F2000 /* NSObject+CMHasFolders.m */; };
+		C1A55E1100010000000D3000 /* CMUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E1100010000000D2000 /* CMUpdater.m */; };
+		C1A55E1100010000000D4000 /* CMUpdater.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E1100010000000D2000 /* CMUpdater.m */; };
+		C1A55E1100010000000CE300 /* SRRecorderCell.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E1100010000000CE200 /* SRRecorderCell.m */; };
+		C1A55E1100010000000CE400 /* SRRecorderCell.m in Sources */ = {isa = PBXBuildFile; fileRef = C1A55E1100010000000CE200 /* SRRecorderCell.m */; };
 		3505FF1D0D7FAE8300B55D03 /* ActionFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = 3505FF1C0D7FAE8300B55D03 /* ActionFactory.m */; };
 		3505FF200D7FAF1F00B55D03 /* ActionNodeFactory.m in Sources */ = {isa = PBXBuildFile; fileRef = 3505FF1F0D7FAF1F00B55D03 /* ActionNodeFactory.m */; };
 		3505FF730D7FB14A00B55D03 /* BuiltInActionController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3505FF720D7FB14A00B55D03 /* BuiltInActionController.m */; };
 		3518CA990D07646C00158053 /* MenuController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3518CA980D07646C00158053 /* MenuController.m */; };
+		C0F11E01A11E000000000002 /* CMFilterHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = C0F11E01A11E000000000001 /* CMFilterHeaderView.m */; };
 		3518CE070D07966B00158053 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3518CE060D07966B00158053 /* Carbon.framework */; };
 		3542A8AF0D5EBF3800B3BBBD /* NSString+NaoAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 3542A8AE0D5EBF3800B3BBBD /* NSString+NaoAdditions.m */; };
 		3542A8CB0D5EC15000B3BBBD /* ActionNodeController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3542A8CA0D5EC15000B3BBBD /* ActionNodeController.m */; };
@@ -52,6 +61,7 @@
 		A82B8AC50EC3F8D700096102 /* ClipsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 356F073E0D024327003689C0 /* ClipsController.m */; };
 		A82B8AC60EC3F8D700096102 /* Clip.m in Sources */ = {isa = PBXBuildFile; fileRef = 3593F1840D025D5500B95536 /* Clip.m */; };
 		A82B8AC70EC3F8D700096102 /* MenuController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3518CA980D07646C00158053 /* MenuController.m */; };
+		C0F11E01A11E000000000003 /* CMFilterHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = C0F11E01A11E000000000001 /* CMFilterHeaderView.m */; };
 		A82B8AC80EC3F8D700096102 /* ActionController.m in Sources */ = {isa = PBXBuildFile; fileRef = 35939DAA0D42D4FE006504B3 /* ActionController.m */; };
 		A82B8ACB0EC3F8D700096102 /* NSString+NaoAdditions.m in Sources */ = {isa = PBXBuildFile; fileRef = 3542A8AE0D5EBF3800B3BBBD /* NSString+NaoAdditions.m */; };
 		A82B8ACC0EC3F8D700096102 /* ActionNodeController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3542A8CA0D5EC15000B3BBBD /* ActionNodeController.m */; };
@@ -182,6 +192,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C1A55E110001000000010000 /* SnippetPrefsController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SnippetPrefsController.h; path = Source/Compatibility/SnippetPrefsController.h; sourceTree = SOURCE_ROOT; };
+		C1A55E110001000000020000 /* SnippetPrefsController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SnippetPrefsController.m; path = Source/Compatibility/SnippetPrefsController.m; sourceTree = SOURCE_ROOT; };
+		C1A55E1100010000000F1000 /* NSObject+CMHasFolders.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "NSObject+CMHasFolders.h"; path = "Source/Compatibility/NSObject+CMHasFolders.h"; sourceTree = SOURCE_ROOT; };
+		C1A55E1100010000000F2000 /* NSObject+CMHasFolders.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = "NSObject+CMHasFolders.m"; path = "Source/Compatibility/NSObject+CMHasFolders.m"; sourceTree = SOURCE_ROOT; };
+		C1A55E1100010000000D1000 /* CMUpdater.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = CMUpdater.h; path = Source/Compatibility/CMUpdater.h; sourceTree = SOURCE_ROOT; };
+		C1A55E1100010000000D2000 /* CMUpdater.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = CMUpdater.m; path = Source/Compatibility/CMUpdater.m; sourceTree = SOURCE_ROOT; };
+		C1A55E1100010000000CE000 /* SRRecorderCell.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SRRecorderCell.h; path = Source/Compatibility/SRRecorderCell.h; sourceTree = SOURCE_ROOT; };
+		C1A55E1100010000000CE200 /* SRRecorderCell.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = SRRecorderCell.m; path = Source/Compatibility/SRRecorderCell.m; sourceTree = SOURCE_ROOT; };
 		089C165DFE840E0CC02AAC07 /* English */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		13E42FB307B3F0F600E4EEF1 /* CoreData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreData.framework; path = /System/Library/Frameworks/CoreData.framework; sourceTree = "<absolute>"; };
@@ -197,6 +215,7 @@
 		3505FF720D7FB14A00B55D03 /* BuiltInActionController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = BuiltInActionController.m; sourceTree = "<group>"; };
 		3518CA970D07646B00158053 /* MenuController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = MenuController.h; path = Source/MenuController.h; sourceTree = "<group>"; };
 		3518CA980D07646C00158053 /* MenuController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = MenuController.m; path = Source/MenuController.m; sourceTree = "<group>"; };
+		C0F11E01A11E000000000001 /* CMFilterHeaderView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = CMFilterHeaderView.m; path = Source/CMFilterHeaderView.m; sourceTree = "<group>"; };
 		3518CE060D07966B00158053 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = /System/Library/Frameworks/Carbon.framework; sourceTree = "<absolute>"; };
 		3542A8AD0D5EBF3800B3BBBD /* NSString+NaoAdditions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+NaoAdditions.h"; sourceTree = "<group>"; };
 		3542A8AE0D5EBF3800B3BBBD /* NSString+NaoAdditions.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSString+NaoAdditions.m"; sourceTree = "<group>"; };
@@ -344,11 +363,20 @@
 			children = (
 				356F060C0D012C68003689C0 /* AppController.h */,
 				356F060D0D012C68003689C0 /* AppController.m */,
+				C1A55E1100010000000CE000 /* SRRecorderCell.h */,
+				C1A55E1100010000000CE200 /* SRRecorderCell.m */,
+				C1A55E1100010000000D1000 /* CMUpdater.h */,
+				C1A55E1100010000000D2000 /* CMUpdater.m */,
+				C1A55E1100010000000F1000 /* NSObject+CMHasFolders.h */,
+				C1A55E1100010000000F2000 /* NSObject+CMHasFolders.m */,
+				C1A55E110001000000010000 /* SnippetPrefsController.h */,
+				C1A55E110001000000020000 /* SnippetPrefsController.m */,
 				A842D3230EA97DA200DCB303 /* constants.h */,
 				3542A9290D5EC6C300B3BBBD /* CMUtilities.h */,
 				3542A92A0D5EC6C300B3BBBD /* CMUtilities.m */,
 				3518CA970D07646B00158053 /* MenuController.h */,
 				3518CA980D07646C00158053 /* MenuController.m */,
+				C0F11E01A11E000000000001 /* CMFilterHeaderView.m */,
 				3505FF180D7FAE0000B55D03 /* Clip */,
 				A83A1FA210AA3F9A002CB62A /* Snippet */,
 				3505FF150D7FADC400B55D03 /* Action */,
@@ -795,11 +823,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1A55E1100010000000D3000 /* CMUpdater.m in Sources */,
+				C1A55E1100010000000F3000 /* NSObject+CMHasFolders.m in Sources */,
+				C1A55E110001000000030000 /* SnippetPrefsController.m in Sources */,
+				C1A55E1100010000000CE300 /* SRRecorderCell.m in Sources */,
 				8D11072D0486CEB800E47090 /* main.m in Sources */,
 				356F060E0D012C68003689C0 /* AppController.m in Sources */,
 				356F073F0D024327003689C0 /* ClipsController.m in Sources */,
 				3593F1850D025D5500B95536 /* Clip.m in Sources */,
 				3518CA990D07646C00158053 /* MenuController.m in Sources */,
+				C0F11E01A11E000000000002 /* CMFilterHeaderView.m in Sources */,
 				35939DAB0D42D4FE006504B3 /* ActionController.m in Sources */,
 				3542A8AF0D5EBF3800B3BBBD /* NSString+NaoAdditions.m in Sources */,
 				3542A8CB0D5EC15000B3BBBD /* ActionNodeController.m in Sources */,
@@ -837,12 +870,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1A55E1100010000000D4000 /* CMUpdater.m in Sources */,
+				C1A55E1100010000000F4000 /* NSObject+CMHasFolders.m in Sources */,
+				C1A55E110001000000040000 /* SnippetPrefsController.m in Sources */,
+				C1A55E1100010000000CE400 /* SRRecorderCell.m in Sources */,
 				A86F939A0ED183FC0058E899 /* ActionPopUpButton.m in Sources */,
 				A82B8AC30EC3F8D700096102 /* main.m in Sources */,
 				A82B8AC40EC3F8D700096102 /* AppController.m in Sources */,
 				A82B8AC50EC3F8D700096102 /* ClipsController.m in Sources */,
 				A82B8AC60EC3F8D700096102 /* Clip.m in Sources */,
 				A82B8AC70EC3F8D700096102 /* MenuController.m in Sources */,
+				C0F11E01A11E000000000003 /* CMFilterHeaderView.m in Sources */,
 				A82B8AC80EC3F8D700096102 /* ActionController.m in Sources */,
 				A82B8ACB0EC3F8D700096102 /* NSString+NaoAdditions.m in Sources */,
 				A82B8ACC0EC3F8D700096102 /* ActionNodeController.m in Sources */,
@@ -967,9 +1005,12 @@
 				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
+				MARKETING_VERSION = 0.4.5;
+				CURRENT_PROJECT_VERSION = 0.4.5;
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
@@ -1001,9 +1042,12 @@
 				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
+				MARKETING_VERSION = 0.4.5;
+				CURRENT_PROJECT_VERSION = 0.4.5;
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
@@ -1035,9 +1079,12 @@
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
+				MARKETING_VERSION = 0.4.5;
+				CURRENT_PROJECT_VERSION = 0.4.5;
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = NO;
@@ -1068,9 +1115,12 @@
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = YES;
 				GCC_WARN_MISSING_PARENTHESES = NO;
 				INFOPLIST_FILE = Info.plist;
+				MARKETING_VERSION = 0.4.5;
+				CURRENT_PROJECT_VERSION = 0.4.5;
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;

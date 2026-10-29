@@ -1,5 +1,5 @@
-ClipMenu (maintenance fork)
-===========================
+ClipMenuNeo (maintenance fork of ClipMenu)
+====================================
 
 A clipboard manager for macOS.
 

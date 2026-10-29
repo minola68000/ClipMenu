@@ -16,6 +16,7 @@
 //@property (nonatomic, retain) NSOperationQueue *queue;
 
 - (IBAction)showPreferencePanel:(id)sender;
+- (IBAction)openPreferencesWindow:(id)sender;
 - (IBAction)showSnippetEditor:(id)sender;
 - (IBAction)clearHistory:(id)sender;
 

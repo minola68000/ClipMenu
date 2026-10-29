@@ -144,7 +144,7 @@ NSDictionary *_storeTypesDictionary()
 	[defaultValues setObject:[NSNumber numberWithUnsignedInteger:20] forKey:CMPrefMaxMenuItemTitleLengthKey];
 	[defaultValues setObject:[NSNumber numberWithUnsignedInteger:0] forKey:CMPrefNumberOfItemsPlaceInlineKey];
 	[defaultValues setObject:[NSNumber numberWithUnsignedInteger:10] forKey:CMPrefNumberOfItemsPlaceInsideFolderKey];
-	[defaultValues setObject:[NSNumber numberWithBool:YES] forKey:CMPrefMenuItemsAreMarkedWithNumbersKey];
+	[defaultValues setObject:[NSNumber numberWithBool:NO] forKey:CMPrefMenuItemsAreMarkedWithNumbersKey];
 	[defaultValues setObject:[NSNumber numberWithBool:NO] forKey:CMPrefMenuItemsTitleStartWithZeroKey];
 	[defaultValues setObject:[NSNumber numberWithBool:NO] forKey:CMPrefAddNumericKeyEquivalentsKey];
 	[defaultValues setObject:[NSNumber numberWithBool:YES] forKey:CMPrefShowLabelsInMenuKey];
@@ -322,33 +322,17 @@ NSDictionary *_storeTypesDictionary()
 	}
 		
 	/*
-	 * This fork ships no appcast. Do not start Sparkle, and scrub any legacy
-	 * Feedburner URL / auto-check flags persisted by older builds.
+	 * This maintenance fork publishes no appcast. Never start Sparkle, and
+	 * scrub legacy Feedburner / schedule keys so old timers cannot resurface.
 	 */
-	NSString *feedURL = [CMUtilities infoValueForKey:@"SUFeedURL"];
-	BOOL hasFeed = [feedURL isKindOfClass:[NSString class]] && [feedURL length] > 0;
-	if (!hasFeed) {
-		[defaults removeObjectForKey:@"SUFeedURL"];
-		[defaults setBool:NO forKey:@"SUEnableAutomaticChecks"];
-		[defaults setBool:NO forKey:CMEnableAutomaticCheckKey];
-		[defaults setBool:NO forKey:CMEnableAutomaticCheckPreReleaseKey];
-		return;
-	}
-	
-	if (!updaterController) {
-		updaterController = [[SPUStandardUpdaterController alloc]
-							 initWithStartingUpdater:YES
-							 updaterDelegate:self
-							 userDriverDelegate:nil];
-	}
-	SPUUpdater *updater = updaterController.updater;
-	updater.automaticallyChecksForUpdates = [defaults boolForKey:CMEnableAutomaticCheckKey];
-	updater.updateCheckInterval = [defaults integerForKey:CMUpdateCheckIntervalKey];
-	
-	[defaults addObserver:self
-			   forKeyPath:CMEnableAutomaticCheckPreReleaseKey
-				  options:NSKeyValueObservingOptionNew
-				  context:nil];
+	[defaults removeObjectForKey:@"SUFeedURL"];
+	[defaults removeObjectForKey:@"SUScheduledCheckInterval"];
+	[defaults removeObjectForKey:@"SULastCheckTime"];
+	[defaults removeObjectForKey:@"SUHasLaunchedBefore"];
+	[defaults setBool:NO forKey:@"SUEnableAutomaticChecks"];
+	[defaults setBool:NO forKey:CMEnableAutomaticCheckKey];
+	[defaults setBool:NO forKey:CMEnableAutomaticCheckPreReleaseKey];
+	(void)updaterController; /* kept for ABI / future feed re-enable */
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification
@@ -399,7 +383,13 @@ NSDictionary *_storeTypesDictionary()
 
 - (IBAction)showPreferencePanel:(id)sender
 {
-	[[PrefsWindowController sharedPrefWindowController] showWindow:nil];
+	[[PrefsWindowController sharedPrefWindowController] showWindow:sender];
+}
+
+/* MainMenu.nib historically wires Preferences to this selector. */
+- (IBAction)openPreferencesWindow:(id)sender
+{
+	[self showPreferencePanel:sender];
 }
 
 - (IBAction)showSnippetEditor:(id)sender

@@ -7,6 +7,7 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import "CMFilterHeaderView.h"
 
 typedef enum {
 	CMPopUpMenuTypeMain = 0,
@@ -21,11 +22,7 @@ typedef enum {
 	CMPositionOfSnippetsBelowClips
 } CMPositionOfSnippets;
 
-//extern NSString *const CMClipMenuWillPopUpNotification;
-//extern NSString *const CMStatusMenuWillUpdateNotification;
-
-
-@interface MenuController : NSObject <NSMenuDelegate>
+@interface MenuController : NSObject <NSMenuDelegate, CMFilterHeaderViewDelegate>
 {
 	NSMenu *clipMenu;
 	NSWindow *dummyWindow;
@@ -52,6 +49,13 @@ typedef enum {
 	NSUInteger menuIconSize;
 	
 	NSMenuItem *highlightedMenuItem;
+
+	/* In-menu filter (keys via local monitor; NSMenu does not type into item views) */
+	NSString *clipFilterString;
+	NSString *pendingClipFilterString;
+	NSMenu *activeFilterMenu;
+	id clipFilterEventMonitor;
+	CMFilterHeaderView *clipFilterHeader;
 }
 @property (nonatomic, retain) NSMenu *clipMenu;
 @property (nonatomic, retain) NSWindow *dummyWindow;
@@ -77,5 +81,7 @@ typedef enum {
 - (void)createStatusItem;
 - (void)updateStatusMenu;
 - (void)popUpMenuForType:(CMPopUpMenuType)type;
+
++ (int)runFilterE2ETest;
 
 @end
