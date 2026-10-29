@@ -655,11 +655,14 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 		return;
 	}
 	CMFilterLog(@"[ClipMenu] statusBarButtonClicked — in-process popUp");
+	[CMUtilities setPasteTargetApplication:[[NSWorkspace sharedWorkspace] frontmostApplication]];
+	[CMUtilities menuWillBeginTracking];
 	[button highlight:YES];
 	[clipMenu popUpMenuPositioningItem:nil
 	                        atLocation:NSMakePoint(0, NSHeight([button bounds]) + 2.0)
 	                            inView:button];
 	[button highlight:NO];
+	[CMUtilities menuDidFinishTracking];
 }
 
 
@@ -730,8 +733,10 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 //		NSLog(@"hilighted: %@", [menu highlightedItem]);
 //	}
 	
+	[CMUtilities menuWillBeginTracking];
 	[NSMenu popUpContextMenu:menu withEvent:newEvent forView:nil];
 	[dummyWindow orderOut:self];
+	[CMUtilities menuDidFinishTracking];
 }
 
 #pragma mark -

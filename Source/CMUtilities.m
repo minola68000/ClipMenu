@@ -163,9 +163,21 @@ NSInteger CMRunAlertPanel(NSString *title, NSString *msg, NSString *defaultButto
 #pragma mark -
 
 static NSRunningApplication *sPasteTargetApplication = nil;
-#ifndef kCMPasteDelay
-#define kCMPasteDelay 0.3
-#endif
+static BOOL sMenuTracking = NO;
+static BOOL sPastePending = NO;
+static void (^sAfterPaste)(void) = nil;
+
+static void CMPostPasteAndNotify(void)
+{
+	postCommandV();
+	if (sAfterPaste) {
+		void (^block)(void) = sAfterPaste;
+		sAfterPaste = nil;
+		/* No API tells when the target finished reading; a short grace before the block runs. */
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+					   dispatch_get_main_queue(), ^{ block(); [block release]; });
+	}
+}
 
 + (void)setPasteTargetApplication:(NSRunningApplication *)app
 {
@@ -173,30 +185,85 @@ static NSRunningApplication *sPasteTargetApplication = nil;
 	sPasteTargetApplication = [app retain];
 }
 
++ (void)menuWillBeginTracking
+{
+	sMenuTracking = YES;
+	sPastePending = NO;
+}
+
++ (void)menuDidFinishTracking
+{
+	sMenuTracking = NO;
+	if (sPastePending) {
+		sPastePending = NO;
+		[self _sendPasteToTarget];
+	}
+}
+
+/*
+ * Cmd+V must not be sent while our menu is still tracking (it would be lost), nor
+ * while ClipMenu is still the active app. Event driven: the paste goes out once
+ * tracking has finished and the previous app is frontmost again.
+ */
++ (void)_sendPasteToTarget
+{
+	NSRunningApplication *target = sPasteTargetApplication;
+	if (!target || [target isTerminated] || [target isEqual:[NSRunningApplication currentApplication]]) {
+		CMPostPasteAndNotify();
+		return;
+	}
+	if ([[[NSWorkspace sharedWorkspace] frontmostApplication] isEqual:target]) {
+		dispatch_async(dispatch_get_main_queue(), ^{ CMPostPasteAndNotify(); });
+		return;
+	}
+	
+	__block BOOL sent = NO;
+	__block id observer = nil;
+	void (^send)(void) = ^{
+		if (sent) {
+			return;
+		}
+		sent = YES;
+		[[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:observer];
+		CMPostPasteAndNotify();
+	};
+	observer = [[[NSWorkspace sharedWorkspace] notificationCenter]
+				addObserverForName:NSWorkspaceDidActivateApplicationNotification
+				object:nil
+				queue:[NSOperationQueue mainQueue]
+				usingBlock:^(NSNotification *note) {
+		NSRunningApplication *activated = [[note userInfo] objectForKey:NSWorkspaceApplicationKey];
+		if ([activated isEqual:target]) {
+			dispatch_async(dispatch_get_main_queue(), send);
+		}
+	}];
+	/* Safety net only: never leave the paste hanging if the notification does not arrive. */
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+				   dispatch_get_main_queue(), send);
+	[target activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+}
+
++ (BOOL)pasteThen:(void (^)(void))afterPaste
+{
+	if (![[NSUserDefaults standardUserDefaults] boolForKey:CMPrefInputPasteCommandKey]) {
+		return NO;
+	}
+	[sAfterPaste release];
+	sAfterPaste = [afterPaste copy];
+	return [self paste];
+}
+
 + (BOOL)paste
 {
 	if (![[NSUserDefaults standardUserDefaults] boolForKey:CMPrefInputPasteCommandKey]) {
 		return NO;
 	}
-	
-	/*
-	 * The menu is still tracking from our own (active) app when this runs, so Cmd+V
-	 * would land on ClipMenu. Hand focus back to the previous app first.
-	 */
-	NSRunningApplication *target = sPasteTargetApplication;
-	if (target && ![target isTerminated] && ![target isEqual:[NSRunningApplication currentApplication]]) {
-		[target retain];
-		[target activateWithOptions:NSApplicationActivateIgnoringOtherApps];
-		/* Wait for the menu to finish dismissing before sending Cmd+V (shorter delays get lost). */
-		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kCMPasteDelay * NSEC_PER_SEC)),
-					   dispatch_get_main_queue(), ^{
-			postCommandV();
-			[target release];
-		});
+	if (sMenuTracking) {
+		sPastePending = YES;
 		return YES;
 	}
-	
-	return postCommandV();
+	[self _sendPasteToTarget];
+	return YES;
 }
 
 + (NSDictionary *)hotKeyMap

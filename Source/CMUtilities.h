@@ -16,8 +16,13 @@
 NSInteger CMRunAlertPanel(NSString *title, NSString *msg, NSString *defaultButton, NSString *alternateButton, NSString *otherButton);
 
 + (BOOL)paste;
+/* Like +paste; block runs shortly after Cmd+V has been sent (not run if pasting is disabled). */
++ (BOOL)pasteThen:(void (^)(void))afterPaste;
 /* App that was frontmost before the menu opened; Cmd+V is sent to it. */
 + (void)setPasteTargetApplication:(NSRunningApplication *)app;
+/* Menu tracking bracket: a paste requested while tracking is sent once it has finished. */
++ (void)menuWillBeginTracking;
++ (void)menuDidFinishTracking;
 + (NSDictionary *)hotKeyMap;
 
 + (NSString *)localizedFileName:(NSString *)filename;

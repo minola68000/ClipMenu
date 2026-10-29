@@ -484,9 +484,9 @@ NSDictionary *_storeTypesDictionary()
 }
 
 /*
- * Every line gets a half-width "> " prefix. The quoted text only lives on the
- * pasteboard for the paste itself: the previous contents are put back afterwards
- * and the history never sees the quoted variant.
+ * Every line gets a half-width "> " prefix. The quoted text is only on the
+ * pasteboard for the paste itself: right after Cmd+V has been sent the previous
+ * contents are put back, and the history never sees the quoted variant.
  */
 - (void)_pasteQuotedString:(NSString *)text
 {
@@ -496,7 +496,6 @@ NSDictionary *_storeTypesDictionary()
 						[normalized stringByReplacingOccurrencesOfString:@"\n" withString:@"\n> "]];
 	
 	NSPasteboard *pboard = [NSPasteboard generalPasteboard];
-	ClipsController *clips = [ClipsController sharedInstance];
 	
 	/* Snapshot of what the user had on the pasteboard. */
 	NSMutableArray *saved = [NSMutableArray array];
@@ -511,16 +510,12 @@ NSDictionary *_storeTypesDictionary()
 		[saved addObject:dataByType];
 	}
 	
-	[pboard clearContents];
-	[pboard setString:quoted forType:NSPasteboardTypeString];
-	clips.cachedChangeCount = [pboard changeCount];		// not a new history entry
-	
-	if (![CMUtilities paste]) {
-		return;		// paste command disabled: leave the quoted text for a manual paste
-	}
-	
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
-				   dispatch_get_main_queue(), ^{
+	__block BOOL restored = NO;
+	void (^restore)(void) = ^{
+		if (restored) {
+			return;
+		}
+		restored = YES;
 		NSPasteboard *pb = [NSPasteboard generalPasteboard];
 		[pb clearContents];
 		NSMutableArray *items = [NSMutableArray array];
@@ -535,7 +530,16 @@ NSDictionary *_storeTypesDictionary()
 			[pb writeObjects:items];
 		}
 		[[ClipsController sharedInstance] setCachedChangeCount:[pb changeCount]];
-	});
+	};
+	
+	[pboard clearContents];
+	[pboard setString:quoted forType:NSPasteboardTypeString];
+	[[ClipsController sharedInstance] setCachedChangeCount:[pboard changeCount]];	// not a new history entry
+	
+	/* Put the user's clipboard back once the paste has gone out. */
+	if (![CMUtilities pasteThen:restore]) {
+		return;		// paste command disabled: leave the quoted text for a manual paste
+	}
 }
 
 - (void)selectMenuItem:(id)sender
