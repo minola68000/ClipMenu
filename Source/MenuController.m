@@ -601,7 +601,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 		[[NSDistributedNotificationCenter defaultCenter]
 		 addObserver:self
 			selector:@selector(statusBarButtonClicked:)
-				name:@"com.naotaka.ClipMenu.popMenu"
+				name:@"io.github.minola68000.ClipMenuNeo.popMenu"
 			  object:nil
 		suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
 	}

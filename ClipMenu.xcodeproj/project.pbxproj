@@ -1010,7 +1010,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
@@ -1047,7 +1047,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;
@@ -1084,7 +1084,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = NO;
@@ -1120,7 +1120,7 @@
 				INSTALL_PATH = "$(HOME)/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				PRODUCT_BUNDLE_IDENTIFIER = com.naotaka.ClipMenu;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.minola68000.ClipMenuNeo;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				PRODUCT_NAME = ClipMenu;
 				RUN_CLANG_STATIC_ANALYZER = YES;

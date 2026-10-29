@@ -9,7 +9,7 @@
 	<key>CFBundleIconFile</key>
 	<string>ClipMenu3</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.naotaka.ClipMenu</string>
+	<string>io.github.minola68000.ClipMenuNeo</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
