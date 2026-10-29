@@ -19,7 +19,7 @@ The original author’s distribution request still applies:
 **How this fork handles that:**
 
 - The product is named **ClipMenuNeo** and uses its own Bundle ID `io.github.minola68000.ClipMenuNeo` (same approach as CleanArchiverNeo). The app bundle is `ClipMenuNeo.app`.
-- Preferences and history of the original `com.naotaka.ClipMenu` are **not** carried over, and macOS permissions (Accessibility / Input Monitoring) must be granted again.
+- On first launch, the preferences of the original `com.naotaka.ClipMenu` are imported once (history and snippets live in `~/Library/Application Support/ClipMenu` and are shared as-is). macOS permissions (Accessibility / Input Monitoring) must be granted again.
 - If you redistribute a further derivative (store listing, commercial product, etc.), change the product name and Bundle ID and keep MIT attribution.
 
 ## What’s different in this fork
