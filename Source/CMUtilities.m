@@ -162,10 +162,38 @@ NSInteger CMRunAlertPanel(NSString *title, NSString *msg, NSString *defaultButto
 
 #pragma mark -
 
+static NSRunningApplication *sPasteTargetApplication = nil;
+#ifndef kCMPasteDelay
+#define kCMPasteDelay 0.3
+#endif
+
++ (void)setPasteTargetApplication:(NSRunningApplication *)app
+{
+	[sPasteTargetApplication release];
+	sPasteTargetApplication = [app retain];
+}
+
 + (BOOL)paste
 {
 	if (![[NSUserDefaults standardUserDefaults] boolForKey:CMPrefInputPasteCommandKey]) {
 		return NO;
+	}
+	
+	/*
+	 * The menu is still tracking from our own (active) app when this runs, so Cmd+V
+	 * would land on ClipMenu. Hand focus back to the previous app first.
+	 */
+	NSRunningApplication *target = sPasteTargetApplication;
+	if (target && ![target isTerminated] && ![target isEqual:[NSRunningApplication currentApplication]]) {
+		[target retain];
+		[target activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+		/* Wait for the menu to finish dismissing before sending Cmd+V (shorter delays get lost). */
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kCMPasteDelay * NSEC_PER_SEC)),
+					   dispatch_get_main_queue(), ^{
+			postCommandV();
+			[target release];
+		});
+		return YES;
 	}
 	
 	return postCommandV();

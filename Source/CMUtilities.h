@@ -16,6 +16,8 @@
 NSInteger CMRunAlertPanel(NSString *title, NSString *msg, NSString *defaultButton, NSString *alternateButton, NSString *otherButton);
 
 + (BOOL)paste;
+/* App that was frontmost before the menu opened; Cmd+V is sent to it. */
++ (void)setPasteTargetApplication:(NSRunningApplication *)app;
 + (NSDictionary *)hotKeyMap;
 
 + (NSString *)localizedFileName:(NSString *)filename;

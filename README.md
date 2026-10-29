@@ -27,7 +27,7 @@ The original author’s distribution request still applies:
 - Universal binary (`arm64` + `x86_64`), deployment target macOS 12+
 - Sparkle 2, Shortcut Recorder 3, and updated AppKit usage
 - Incremental search in the menu: typing fills the search field at the top; the filter applies after 0.5 s without input. Matches are re-packed from the top into inline items and folders, with the matched text highlighted in yellow. Snippets and Preferences / Quit stay available while filtering. Digit keys no longer jump to items, and history numbers are not shown.
-- **Shift+Return** on a highlighted history item or snippet pastes it quoted: a half-width `> ` is added to the start of every line. Plain Return pastes as usual.
+- **Shift+Return** on a highlighted history item or snippet pastes it quoted: a half-width `> ` is added to the start of every line. The quoted text is not kept: the previous clipboard contents are restored and the history gets no new entry. Plain Return pastes as usual.
 - Automatic update checks against the original Feedburner appcast are **disabled** (no fork appcast is published)
 - Build helpers: `script/build-modern.sh`, `script/install-modern.sh`
 

@@ -8,6 +8,7 @@
 
 #import "MenuController.h"
 #import "CMFilterHeaderView.h"
+#import "CMUtilities.h"
 #import <Carbon/Carbon.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import "constants.h"
@@ -672,6 +673,10 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	
 //	NSLog(@"currentEvent: %@", currentEvent);
 //	NSLog(@"origin: %@", NSStringFromPoint([currentEvent locationInWindow]));
+	
+	NSRunningApplication *frontmost = [[NSWorkspace sharedWorkspace] frontmostApplication];
+	[CMUtilities setPasteTargetApplication:
+		([frontmost isEqual:[NSRunningApplication currentApplication]] ? nil : frontmost)];
 	
 	[dummyWindow makeKeyAndOrderFront:self];
 	[dummyWindow setFrameOrigin:locationInWindow];

@@ -483,16 +483,59 @@ NSDictionary *_storeTypesDictionary()
 	[[MenuController sharedInstance] popUpMenuForType:CMPopUpMenuTypeSnippets];
 }
 
-/* Every line gets a half-width "> " prefix. */
+/*
+ * Every line gets a half-width "> " prefix. The quoted text only lives on the
+ * pasteboard for the paste itself: the previous contents are put back afterwards
+ * and the history never sees the quoted variant.
+ */
 - (void)_pasteQuotedString:(NSString *)text
 {
 	NSString *normalized = [[text stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]
 							stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"];
 	NSString *quoted = [@"> " stringByAppendingString:
 						[normalized stringByReplacingOccurrencesOfString:@"\n" withString:@"\n> "]];
-	Clip *newClip = [Clip clipWithString:quoted];
-	[[ClipsController sharedInstance] copyClipToPasteboard:newClip];
-	[CMUtilities paste];
+	
+	NSPasteboard *pboard = [NSPasteboard generalPasteboard];
+	ClipsController *clips = [ClipsController sharedInstance];
+	
+	/* Snapshot of what the user had on the pasteboard. */
+	NSMutableArray *saved = [NSMutableArray array];
+	for (NSPasteboardItem *item in [pboard pasteboardItems]) {
+		NSMutableDictionary *dataByType = [NSMutableDictionary dictionary];
+		for (NSString *type in [item types]) {
+			NSData *data = [item dataForType:type];
+			if (data) {
+				[dataByType setObject:data forKey:type];
+			}
+		}
+		[saved addObject:dataByType];
+	}
+	
+	[pboard clearContents];
+	[pboard setString:quoted forType:NSPasteboardTypeString];
+	clips.cachedChangeCount = [pboard changeCount];		// not a new history entry
+	
+	if (![CMUtilities paste]) {
+		return;		// paste command disabled: leave the quoted text for a manual paste
+	}
+	
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+				   dispatch_get_main_queue(), ^{
+		NSPasteboard *pb = [NSPasteboard generalPasteboard];
+		[pb clearContents];
+		NSMutableArray *items = [NSMutableArray array];
+		for (NSDictionary *dataByType in saved) {
+			NSPasteboardItem *item = [[[NSPasteboardItem alloc] init] autorelease];
+			for (NSString *type in dataByType) {
+				[item setData:[dataByType objectForKey:type] forType:type];
+			}
+			[items addObject:item];
+		}
+		if ([items count] > 0) {
+			[pb writeObjects:items];
+		}
+		[[ClipsController sharedInstance] setCachedChangeCount:[pb changeCount]];
+	});
 }
 
 - (void)selectMenuItem:(id)sender
