@@ -483,9 +483,29 @@ NSDictionary *_storeTypesDictionary()
 	[[MenuController sharedInstance] popUpMenuForType:CMPopUpMenuTypeSnippets];
 }
 
+/* Every line gets a half-width "> " prefix. */
+- (void)_pasteQuotedString:(NSString *)text
+{
+	NSString *normalized = [[text stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]
+							stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"];
+	NSString *quoted = [@"> " stringByAppendingString:
+						[normalized stringByReplacingOccurrencesOfString:@"\n" withString:@"\n> "]];
+	Clip *newClip = [Clip clipWithString:quoted];
+	[[ClipsController sharedInstance] copyClipToPasteboard:newClip];
+	[CMUtilities paste];
+}
+
 - (void)selectMenuItem:(id)sender
 {	
 //	NSLog(@"selectMenuItem: %@", sender);
+	
+	if ([[MenuController sharedInstance] consumeQuotedPasteRequest]) {
+		Clip *clip = [[ClipsController sharedInstance] clipAtIndex:[sender tag]];
+		if ([[clip stringValue] length] > 0) {
+			[self _pasteQuotedString:[clip stringValue]];
+			return;
+		}
+	}
 			
 	BOOL actionApplied = [self _applyActionToTarget:sender];
 	if (actionApplied) {
@@ -509,6 +529,14 @@ NSDictionary *_storeTypesDictionary()
 	}
 	
 //	NSLog(@"snippet: %@", snippet);
+	
+	if ([[MenuController sharedInstance] consumeQuotedPasteRequest]) {
+		NSString *content = [snippet valueForKey:kContent];
+		if ([content length] > 0) {
+			[self _pasteQuotedString:content];
+			return;
+		}
+	}
 		
 	BOOL actionApplied = [self _applyActionToTarget:sender];
 	if (actionApplied) {

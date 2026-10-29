@@ -14,6 +14,8 @@
 - (void)filterHeaderClear:(CMFilterHeaderView *)header;
 - (void)filterHeaderApply:(CMFilterHeaderView *)header;
 - (NSString *)filterHeaderCurrentString:(CMFilterHeaderView *)header;
+/* YES = key consumed (Shift+Return quoted paste); NO = let the menu confirm the item. */
+- (BOOL)filterHeaderReturnPressed:(CMFilterHeaderView *)header shift:(BOOL)shift;
 @end
 
 @interface CMFilterHeaderView : NSView <NSTextFieldDelegate>

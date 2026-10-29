@@ -84,4 +84,6 @@ typedef enum {
 
 + (int)runFilterE2ETest;
 
+- (BOOL)consumeQuotedPasteRequest;
+
 @end

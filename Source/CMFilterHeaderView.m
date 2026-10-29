@@ -333,7 +333,11 @@ static OSStatus CMFilterCarbonCallback(EventHandlerCallRef handler,
 		(modFlags & NSEventModifierFlagOption)) {
 		return NO;
 	}
-	return [self handleRawKeyCode:[ev keyCode] characters:[ev charactersIgnoringModifiers]];
+	unsigned short kc = [ev keyCode];
+	if (kc == 36 || kc == 76) {
+		return [delegate filterHeaderReturnPressed:self shift:((modFlags & NSEventModifierFlagShift) != 0)];
+	}
+	return [self handleRawKeyCode:kc characters:[ev charactersIgnoringModifiers]];
 }
 
 - (BOOL)handleRawKeyCode:(unsigned short)kc characters:(NSString *)chars
@@ -360,8 +364,7 @@ static OSStatus CMFilterCarbonCallback(EventHandlerCallRef handler,
 		return NO;
 	}
 	if (kc == 36 || kc == 76) {
-		[del filterHeaderApply:self];
-		return YES;
+		return [del filterHeaderReturnPressed:self shift:NO];
 	}
 	if (kc == 51) {
 		if ([current length] > 0) {

@@ -52,6 +52,8 @@ static BOOL sCMFilterDidRequestListen = NO;
 /* Items added to the menu while filtering (matches re-packed from the top). */
 static NSMutableArray *sCMFilterResultItems = nil;
 static CGFloat sCMHistorySubmenuWidth = 0;
+/* Set by Shift+Return; consumed by AppController when the item is confirmed. */
+static BOOL sCMQuotedPasteRequested = NO;
 
 static CGEventRef CMFilterMenuCGEventTapCallback(CGEventTapProxy proxy,
 												 CGEventType type,
@@ -315,6 +317,8 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 - (void)_applyFilterVisibilityToMenu:(NSMenu *)menu;
 - (void)_rebuildFilterResultsInMenu:(NSMenu *)menu filter:(NSString *)filter;
 - (BOOL)_isHistoryClipItem:(NSMenuItem *)item;
+- (BOOL)_handleReturnKeyWithShift:(BOOL)shift;
+- (NSMenuItem *)_highlightedLeafItem;
 - (NSString *)_excerptOfClip:(Clip *)clip forFilter:(NSString *)filter;
 - (void)_highlightFilter:(NSString *)filter inMenuItem:(NSMenuItem *)item;
 - (BOOL)_isHistoryFolderItem:(NSMenuItem *)item;
@@ -1351,10 +1355,10 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 		}
 		return eventNotHandledErr;
 	}
-	/* Return / Enter — apply now, let menu keep Enter for item selection only when empty filter? consume always apply */
+	/* Return / Enter — apply pending filter, then let the menu confirm (Shift+Return = quoted paste). */
 	if (keyCode == 36 || keyCode == 76) {
-		[self _updatePendingClipFilter:current applyImmediately:YES];
-		return noErr;
+		BOOL shift = (modifiers & (shiftKey | rightShiftKey)) != 0;
+		return [self _handleReturnKeyWithShift:shift] ? noErr : eventNotHandledErr;
 	}
 	/* Delete / Forward delete */
 	if (keyCode == 51 || keyCode == 117) {
@@ -1484,8 +1488,7 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	}
 	if (c == NSCarriageReturnCharacter || c == NSEnterCharacter || c == '\r' || c == '\n' ||
 		kc == 36 || kc == 76) {
-		[self _updatePendingClipFilter:current applyImmediately:YES];
-		return nil;
+		return [self _handleReturnKeyWithShift:((mods & NSEventModifierFlagShift) != 0)] ? nil : event;
 	}
 	/* Arrows / function keys — leave to menu navigation. */
 	if (kc == 123 || kc == 124 || kc == 125 || kc == 126 ||
@@ -1560,6 +1563,60 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 {
 	(void)header;
 	[self _updatePendingClipFilter:kEmptyString applyImmediately:YES];
+}
+
+- (BOOL)filterHeaderReturnPressed:(CMFilterHeaderView *)header shift:(BOOL)shift
+{
+	(void)header;
+	return [self _handleReturnKeyWithShift:shift];
+}
+
+- (BOOL)consumeQuotedPasteRequest
+{
+	BOOL requested = sCMQuotedPasteRequested;
+	sCMQuotedPasteRequested = NO;
+	return requested;
+}
+
+/* Deepest highlighted leaf item across the open menu / submenus. */
+- (NSMenuItem *)_highlightedLeafItem
+{
+	NSMenu *menu = activeFilterMenu;
+	NSMenuItem *item = nil;
+	while (menu) {
+		NSMenuItem *highlighted = [menu highlightedItem];
+		if (!highlighted) {
+			break;
+		}
+		item = highlighted;
+		menu = [highlighted hasSubmenu] ? [highlighted submenu] : nil;
+	}
+	return ([item hasSubmenu]) ? nil : item;
+}
+
+/*
+ * Return confirms the highlighted item (NO = pass the key to the menu).
+ * Shift+Return confirms it as a quoted paste ("> " on every line).
+ */
+- (BOOL)_handleReturnKeyWithShift:(BOOL)shift
+{
+	NSString *current = pendingClipFilterString ? pendingClipFilterString : kEmptyString;
+	[self _updatePendingClipFilter:current applyImmediately:YES];
+	if (!shift) {
+		return NO;
+	}
+	NSMenuItem *item = [self _highlightedLeafItem];
+	SEL action = [item action];
+	if (action != @selector(selectMenuItem:) && action != @selector(selectSnippetMenuItem:)) {
+		return NO;
+	}
+	sCMQuotedPasteRequested = YES;
+	[activeFilterMenu cancelTracking];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[NSApp sendAction:action to:[item target] from:item];
+		sCMQuotedPasteRequested = NO;
+	});
+	return YES;
 }
 
 - (void)filterHeaderApply:(CMFilterHeaderView *)header
