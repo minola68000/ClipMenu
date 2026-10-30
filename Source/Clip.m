@@ -12,6 +12,7 @@
 #define TYPES_KEY @"types"
 #define CREATED_DATE_KEY @"createdDate"
 #define LAST_USED_DATE_KEY @"lastUsedDate"
+#define RECALLED_KEY @"recalled"
 #define STRING_VALUE_KEY @"stringValue"
 #define RTFDATA_KEY @"RTFData"
 #define RTF_KEY @"RTF"
@@ -96,6 +97,7 @@
 @synthesize types;
 @synthesize createdDate;
 @synthesize lastUsedDate;
+@synthesize recalled;
 @synthesize stringValue;
 @synthesize RTFData;
 //@synthesize RTF;
@@ -237,6 +239,7 @@
 	[clip setTypes:[aClip types]];
 	[clip setCreatedDate:[aClip createdDate]];
 	[clip setLastUsedDate:[aClip lastUsedDate]];
+	[clip setRecalled:[aClip recalled]];
 	[clip setStringValue:[aClip stringValue]];
 	[clip setRTFData:[aClip RTFData]];
 //	[clip setRTF:[aClip RTF]];
@@ -281,6 +284,7 @@
 	[encoder encodeObject:self.types forKey:TYPES_KEY];
 	[encoder encodeObject:self.createdDate forKey:CREATED_DATE_KEY];
 	[encoder encodeObject:self.lastUsedDate forKey:LAST_USED_DATE_KEY];
+	[encoder encodeBool:self.recalled forKey:RECALLED_KEY];
 	[encoder encodeObject:self.stringValue forKey:STRING_VALUE_KEY];
 	[encoder encodeObject:self.RTFData forKey:RTFDATA_KEY];
 //	[encoder encodeObject:self.RTF forKey:RTF_KEY];
@@ -319,6 +323,7 @@
 		[self setTypes:[decoder decodeObjectForKey:TYPES_KEY]];
 		[self setCreatedDate:createdAt];
 		[self setLastUsedDate:usedAt];
+		[self setRecalled:[decoder decodeBoolForKey:RECALLED_KEY]];
 		[self setStringValue:[decoder decodeObjectForKey:STRING_VALUE_KEY]];
 		[self setRTFData:rtfData];
 //		[self setRTF:[decoder decodeObjectForKey:RTF_KEY]];

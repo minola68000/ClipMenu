@@ -546,10 +546,16 @@ NSDictionary *_storeTypesDictionary()
 {	
 //	NSLog(@"selectMenuItem: %@", sender);
 	
+	NSInteger tag = [sender tag];
+	Clip *selectedClip = [[ClipsController sharedInstance] clipAtIndex:tag];
+	if (selectedClip && ![selectedClip recalled]) {
+		[selectedClip setRecalled:YES];
+		[[ClipsController sharedInstance] saveClips];
+	}
+	
 	if ([[MenuController sharedInstance] consumeQuotedPasteRequest]) {
-		Clip *clip = [[ClipsController sharedInstance] clipAtIndex:[sender tag]];
-		if ([[clip stringValue] length] > 0) {
-			[self _pasteQuotedString:[clip stringValue]];
+		if ([[selectedClip stringValue] length] > 0) {
+			[self _pasteQuotedString:[selectedClip stringValue]];
 			return;
 		}
 	}
@@ -559,7 +565,6 @@ NSDictionary *_storeTypesDictionary()
 		return;		// no problem
 	}
 	
-	NSInteger tag = [sender tag];
 	[[ClipsController sharedInstance] copyClipToPasteboardAtIndex:tag];
 	
 	[CMUtilities paste];

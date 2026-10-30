@@ -31,7 +31,7 @@ The original author’s distribution request still applies:
 - Automatic update checks against the original Feedburner appcast are **disabled** (no fork appcast is published)
 - Build helpers: `script/build-modern.sh`, `script/install-modern.sh`
 
-Version string: **0.4.5** (maintenance port of upstream `0.4.4a13`). Set via `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in the Xcode project; the copyright line lives in `InfoPlist.strings`. Later fork releases append a digit (e.g. `0.4.51`), as CleanArchiverNeo does (`4.0` → `4.01`).
+Version string: **0.4.51** (maintenance port of upstream `0.4.4a13`). Set via `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in the Xcode project; the copyright line lives in `InfoPlist.strings`. Later fork releases append a digit (e.g. `0.4.51`), as CleanArchiverNeo does (`4.0` → `4.01`).
 
 ## Permissions
 

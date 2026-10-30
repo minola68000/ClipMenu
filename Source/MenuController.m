@@ -228,40 +228,52 @@ NSString *trimTitle(NSString *clipString)
 	return titleString;
 }
 
-NSAttributedString *makeAttributedTitle(NSString *title)
+NSAttributedString *makeAttributedTitleWithColor(NSString *title, NSColor *color)
 {
+	if (!title) {
+		title = @"";
+	}
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	BOOL isChangeFontSize = [defaults boolForKey:CMPrefChangeFontSizeKey];
 	NSInteger howToChangeFontSize = [defaults integerForKey:CMPrefHowToChangeFontSizeKey];
 	BOOL isShowIcon = [defaults boolForKey:CMPrefShowIconInTheMenuKey];
 	
-	if (!isChangeFontSize) {
+	if (!isChangeFontSize && color == nil) {
 		return nil;
 	}
 	
-	CGFloat fontSize = DEFAULT_MENU_FONT_SIZE;
-	
-	if (howToChangeFontSize == 0 && isShowIcon) {
-		NSUInteger iconSize = [defaults integerForKey:CMPrefMenuIconSizeKey];
-		switch (iconSize) {
-			case LARGE_ICON_SIZE:
-				fontSize = LARGE_MENU_FONT_SIZE;
-				break;
-			case HUGE_ICON_SIZE:
-				fontSize = HUGE_MENU_FONT_SIZE;
-				break;
+	NSMutableDictionary *attrsDict = [NSMutableDictionary dictionary];
+	if (isChangeFontSize) {
+		CGFloat fontSize = DEFAULT_MENU_FONT_SIZE;
+		if (howToChangeFontSize == 0 && isShowIcon) {
+			NSUInteger iconSize = [defaults integerForKey:CMPrefMenuIconSizeKey];
+			switch (iconSize) {
+				case LARGE_ICON_SIZE:
+					fontSize = LARGE_MENU_FONT_SIZE;
+					break;
+				case HUGE_ICON_SIZE:
+					fontSize = HUGE_MENU_FONT_SIZE;
+					break;
+			}
+		}
+		else if (howToChangeFontSize == 1) {
+			fontSize = [defaults floatForKey:CMPrefSelectedFontSizeKey];
+		}
+		[attrsDict setObject:[NSFont systemFontOfSize:fontSize] forKey:NSFontAttributeName];
+	}
+	if (color) {
+		[attrsDict setObject:color forKey:NSForegroundColorAttributeName];
+		/* Menus often drop color unless a font is present too. */
+		if (![attrsDict objectForKey:NSFontAttributeName]) {
+			[attrsDict setObject:[NSFont menuFontOfSize:0] forKey:NSFontAttributeName];
 		}
 	}
-	else if (howToChangeFontSize == 1) {
-		fontSize = [defaults floatForKey:CMPrefSelectedFontSizeKey];
-	}
-	
-	NSFont *font = [NSFont systemFontOfSize:fontSize];
-	NSDictionary *attrsDict = [NSDictionary dictionaryWithObject:font
-														  forKey:NSFontAttributeName];
-	NSAttributedString *attrString = [[[NSAttributedString alloc] initWithString:title
-																	  attributes:attrsDict] autorelease];
-	return attrString;
+	return [[[NSAttributedString alloc] initWithString:title attributes:attrsDict] autorelease];
+}
+
+NSAttributedString *makeAttributedTitle(NSString *title)
+{
+	return makeAttributedTitleWithColor(title, nil);
 }
 
 #pragma mark -
@@ -1200,9 +1212,12 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 			/* Match lies on a later line / in the shortened part: show it in context. */
 			NSString *excerpt = [self _excerptOfClip:[clips objectAtIndex:clipIndex] forFilter:filter];
 			if (excerpt) {
-				NSString *shown = [self _typeaheadMutedTitle:excerpt];
+				Clip *matched = [clips objectAtIndex:clipIndex];
+				NSString *body = [matched recalled] ? [@"● " stringByAppendingString:excerpt] : excerpt;
+				NSString *shown = [self _typeaheadMutedTitle:body];
 				[menuItem setTitle:shown];
-				[menuItem setAttributedTitle:makeAttributedTitle(shown)];
+				NSColor *c = [matched recalled] ? [NSColor systemRedColor] : nil;
+				[menuItem setAttributedTitle:makeAttributedTitleWithColor(shown, c)];
 			}
 		}
 		[self _highlightFilter:filter inMenuItem:menuItem];
@@ -1768,6 +1783,10 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 	NSString *titleWithMark = [self _menuItemTitleWithString:title
 												  listNumber:listNumber 
 													 boolean:isMarkWithNumber];
+	/* Recalled items: visible mark (menus often ignore attributed colors). */
+	if ([clip recalled]) {
+		titleWithMark = [@"● " stringByAppendingString:titleWithMark];
+	}
 	NSString *mutedTitle = [self _typeaheadMutedTitle:titleWithMark];
 	
 	NSMenuItem *menuItem = [[[NSMenuItem allocWithZone:[NSMenu menuZone]]
@@ -1785,28 +1804,38 @@ NSAttributedString *makeAttributedTitle(NSString *title)
 		[menuItem setToolTip:[clipString substringToIndex:toIndex]];
 	}
 	
-	/* Change Menu Font Size */
-	NSAttributedString *attrString = makeAttributedTitle(mutedTitle);
+	/* Recalled (= pasted from this menu once) → red title next time. */
+	NSColor *titleColor = [clip recalled] ? [NSColor systemRedColor] : nil;
+	NSAttributedString *attrString = makeAttributedTitleWithColor(mutedTitle, titleColor);
 	if (attrString) {
 		[menuItem setAttributedTitle:attrString];
 	}
 	
 	if ([primaryPboardType isEqualToString:NSTIFFPboardType]
-		|| [primaryPboardType isEqualToString:NSPICTPboardType]) {
-		[menuItem setTitle:[self _typeaheadMutedTitle:[self _menuItemTitleWithString:@"(Image)"
-											   listNumber:listNumber
-												  boolean:isMarkWithNumber]]];
+		|| [primaryPboardType isEqualToString:NSPICTPboardType]
+		|| [primaryPboardType isEqualToString:NSPDFPboardType]
+		|| ([primaryPboardType isEqualToString:NSFilenamesPboardType]
+			&& [title isEqualToString:kEmptyString])) {
+		NSString *fallback = @"(Filenames)";
+		if ([primaryPboardType isEqualToString:NSTIFFPboardType]
+			|| [primaryPboardType isEqualToString:NSPICTPboardType]) {
+			fallback = @"(Image)";
+		} else if ([primaryPboardType isEqualToString:NSPDFPboardType]) {
+			fallback = @"(PDF)";
+		}
+		NSString *marked = [self _menuItemTitleWithString:fallback
+												  listNumber:listNumber
+													 boolean:isMarkWithNumber];
+		if ([clip recalled]) {
+			marked = [@"● " stringByAppendingString:marked];
+		}
+		[menuItem setTitle:[self _typeaheadMutedTitle:marked]];
 	}
-	else if ([primaryPboardType isEqualToString:NSPDFPboardType]) {
-		[menuItem setTitle:[self _typeaheadMutedTitle:[self _menuItemTitleWithString:@"(PDF)"
-											   listNumber:listNumber
-												  boolean:isMarkWithNumber]]];
-	}
-	else if ([primaryPboardType isEqualToString:NSFilenamesPboardType]
-			 && [title isEqualToString:kEmptyString]) {
-		[menuItem setTitle:[self _typeaheadMutedTitle:[self _menuItemTitleWithString:@"(Filenames)"
-											   listNumber:listNumber
-												  boolean:isMarkWithNumber]]];
+	if (titleColor) {
+		NSAttributedString *colored = makeAttributedTitleWithColor([menuItem title], titleColor);
+		if (colored) {
+			[menuItem setAttributedTitle:colored];
+		}
 	}
 	
 	/* image */

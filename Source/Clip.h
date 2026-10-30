@@ -13,6 +13,7 @@
 	NSArray *types;
 	NSDate *createdDate;
 	NSDate *lastUsedDate;
+	BOOL recalled;
 
 	NSString *stringValue;
 	NSData *RTFData;
@@ -30,6 +31,7 @@
 @property (nonatomic, retain) NSArray *types;
 @property (nonatomic, retain) NSDate *createdDate;
 @property (nonatomic, retain) NSDate *lastUsedDate;
+@property (nonatomic, assign) BOOL recalled;
 @property (nonatomic, retain) NSString *stringValue;
 @property (nonatomic, retain) NSData *RTFData;
 //@property (nonatomic, readonly) NSData *RTF;
